@@ -14,6 +14,29 @@ Base.@kwdef struct ShearOptions
     stat::Symbol = :median          # :median | :mean bin statistic
     min_bin_obs::Int = 4            # bins with fewer shear samples are treated as gaps
     min_pings::Int = 30
+    referencing::Symbol = :timeweighted   # :timeweighted | :simple
+end
+
+"""
+    time_in_bin(depth, t, z; dz) -> Vector
+
+Seconds the glider spent in each depth bin (centers `z`, width `dz`), from the per-ping
+glider depths and times. Ping intervals are capped at 10× the median (surfacing gaps).
+"""
+function time_in_bin(depth::AbstractVector, t::AbstractVector, z::AbstractVector; dz::Real)
+    w = zeros(length(z))
+    n = length(t)
+    n < 2 && return w
+    dts = diff(t)
+    mdt = median(dts)
+    for i in 1:n-1
+        isfinite(depth[i]) || continue
+        kb = floor(Int, depth[i] / dz) + 1
+        k = findfirst(zz -> abs(zz - (kb - 0.5) * dz) < dz / 4, z)
+        k === nothing && continue
+        w[k] += clamp(dts[i], 0, 10mdt)
+    end
+    return w
 end
 
 """
@@ -100,8 +123,16 @@ function solve_shear(p::ProcessedPings, dac::DataFrame; opts::ShearOptions=Shear
         covered = [k for k in eachindex(seg.z)
                    if seg.nobs[k] >= opts.min_bin_obs && seg.z[k] <= maximum(gd)]
         isempty(covered) && continue
-        uref = row.u - mean(u_bc[covered])
-        vref = row.v - mean(v_bc[covered])
+        if opts.referencing === :timeweighted
+            # DAC is a TIME average over the yo — weight bins by glider residence time
+            w = time_in_bin(p.depth[idx], p.t[idx], seg.z; dz=opts.dz)[covered]
+            sum(w) > 0 || (w = ones(length(covered)))
+            uref = row.u - sum(w .* u_bc[covered]) / sum(w)
+            vref = row.v - sum(w .* v_bc[covered]) / sum(w)
+        else
+            uref = row.u - mean(u_bc[covered])
+            vref = row.v - mean(v_bc[covered])
+        end
         for k in eachindex(seg.z)
             push!(out, (row.yo, row.t_mid, seg.z[k], u_bc[k] + uref, v_bc[k] + vref,
                 seg.nobs[k]))

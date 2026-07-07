@@ -474,6 +474,111 @@ end
         end
     end
 
+    @testset "time-weighted DAC referencing" begin
+        # Glider dwells shallow, then sweeps deep: DAC (a time average along the track)
+        # differs from the depth average — referencing must weight by residence time.
+        u_o(z) = 0.3 * exp(-z / 60)                  # smooth, surface-intensified
+        nt = 1000
+        t0 = DateTime(2022, 11, 4)
+        times = t0 .+ Second.(10 .* (0:nt-1))
+        tunix = datetime2unix.(times)
+        nd = round(Int, 0.6nt)
+        depth = [i <= nd ? 20.0 + 5 * sin(i / 9) :
+                 5 + 190 * (i - nd) / (nt - nd) for i in 1:nt]
+        offsets = collect(0.0:1.0:30.0)
+        celldepth = offsets .+ depth'
+        ug = 0.2
+        E = [u_o(celldepth[k, i]) - ug for k in 1:31, i in 1:nt]
+        pp = ProcessedPings(times, tunix, depth, offsets, E, zeros(31, nt),
+            zeros(31, nt), celldepth, :down, fill((1, 2, 4), nt))
+        dacu = mean(u_o.(depth))                     # what the nav DAC measures
+        dacdf = DataFrame(yo=[1], t_start=[times[1]], t_end=[times[end]],
+            t_mid=[times[nt÷2]], u=[dacu], v=[0.0])
+
+        sh_tw = solve_shear(pp, dacdf; opts=ShearOptions(referencing=:timeweighted))
+        sh_si = solve_shear(pp, dacdf; opts=ShearOptions(referencing=:simple))
+        g = (sh_tw.nobs .>= 4) .&& (sh_tw.z .< 200)
+        err_tw = maximum(abs.(sh_tw.u[g] .- u_o.(sh_tw.z[g])))
+        err_si = maximum(abs.(sh_si.u[g] .- u_o.(sh_si.z[g])))
+        @test err_tw < 0.04
+        @test err_si > err_tw + 0.02                 # simple referencing is biased here
+
+        inv_tw = solve_inverse(pp, dacdf; opts=InverseOptions(dac_form=:ocean_timeweighted))
+        inv_pl = solve_inverse(pp, dacdf)            # plain :ocean form
+        gi = inv_tw.nobs .> 20
+        err_itw = maximum(abs.(inv_tw.u[gi] .- u_o.(inv_tw.z[gi])))
+        err_ipl = maximum(abs.(inv_pl.u[inv_pl.nobs .> 20] .-
+                               u_o.(inv_pl.z[inv_pl.nobs .> 20])))
+        @test err_itw < 0.04
+        @test err_ipl > err_itw                      # plain depth-mean form is biased here
+    end
+
+    @testset "slocum helpers" begin
+        t0 = DateTime(2023, 5, 1)
+        df = DataFrame(
+            time=t0 .+ Minute.(0:9),
+            source_file=[fill("seg1", 5); fill("seg2", 5)],
+            m_water_vx=[missing, missing, 0.1, missing, 0.1,
+                        missing, 0.05, missing, missing, 0.05],
+            m_water_vy=[missing, missing, 0.0, missing, 0.0,
+                        missing, 0.0, missing, missing, 0.0],
+            m_gps_mag_var=fill(deg2rad(90.0), 10),   # extreme declination for clarity
+            depth=fill(50.0, 10),
+            latitude=fill(18.0, 10), longitude=fill(-64.0, 10),
+            m_heading=fill(π / 2, 10), m_pitch=fill(-0.3, 10), m_roll=zeros(10))
+        dacs = dac_from_slocum(df)
+        @test nrow(dacs) == 2
+        # (vx=0.1, vy=0) rotated CCW by +90°: u→0, v→0.1
+        @test dacs.u[1] ≈ 0.0 atol = 1e-12
+        @test dacs.v[1] ≈ 0.1 atol = 1e-12
+        nav = slocum_nav(df)
+        @test length(nav) == 10
+        @test nav.heading[1] ≈ 90.0
+        @test nav.declination[1] ≈ 90.0
+        @test nav.lat[1] == 18.0
+    end
+
+    if isdir(M38_PLD) && isfile(M38_NC)
+        @testset "M38 acceptance: \$PNOR real-time stream" begin
+            files = seaexplorer_files(M38_PLD, "ad2cp.raw")[10:11]
+            a = load_pnor(files)
+            @test ncells(a) == 15
+            @test a.config.coordsystem === :beam
+            @test a.config.cellsize ≈ 2.0 atol = 1e-6
+            @test a.config.blanking ≈ 0.7 atol = 1e-6
+            @test a.config.serial == 102381
+            @test a.range ≈ collect(2.7:2.0:30.7) atol = 1e-3
+            # cross-check against the full-resolution netCDF (match by time)
+            nc = load_ad2cp(M38_NC)
+            i1 = searchsortedfirst(nc.t, a.t[1] - 2)
+            i2 = searchsortedlast(nc.t, a.t[end] + 2)
+            hs = Float64[]; hn = Float64[]; vs = Float64[]; vn = Float64[]
+            for i in i1:i2
+                j = searchsortedfirst(a.t, nc.t[i] - 0.6)
+                (1 <= j <= length(a)) || continue
+                abs(a.t[j] - nc.t[i]) < 1.0 || continue
+                if isfinite(a.heading[j]) && isfinite(nc.heading[i])
+                    push!(hs, a.heading[j]); push!(hn, nc.heading[i])
+                end
+                if isfinite(a.vel[5, 1, j]) && isfinite(nc.vel[5, 1, i])
+                    push!(vs, a.vel[5, 1, j]); push!(vn, nc.vel[5, 1, i])
+                end
+            end
+            @test length(hs) > 200
+            @test cor(hs, hn) > 0.999
+            @test length(vs) > 100
+            @test cor(vs, vn) > 0.98
+            @test median(abs.(vs .- vn)) < 0.02       # 0.01 m/s stream quantization
+            @info "PNOR vs netCDF: $(length(hs)) matched ensembles, " *
+                  "r_heading=$(round(cor(hs, hn), digits=4)), r_vel=$(round(cor(vs, vn), digits=3))"
+        end
+    end
+
+    @testset "Aqua quality assurance" begin
+        import Aqua
+        Aqua.test_all(GliderADCP; ambiguities=false)
+    end
+
     # ---------------- acceptance tests on local reference data ----------------
 
     if isfile(M38_NC)

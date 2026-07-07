@@ -51,6 +51,18 @@ export ProcessedPings, process_pings, glider_depth, segment_indices, bt_velocity
 export InverseOptions, invert_segment, solve_inverse
 export ShearOptions, shear_segment, integrate_shear, solve_shear
 export magnetic_declination, grid_profiles, export_sections
+export load_pnor, slocum_nav, dac_from_slocum, time_in_bin, plot_sections
+
+"""
+    plot_sections(panels; colorrange=(-0.5, 0.5), colormap=:balance, figsize=...)
+
+Section figure from gridded profiles: `panels` is a vector of
+`(section, field::Symbol, title)` tuples, e.g.
+`[(sec, :U, "U — inverse"), (sec, :V, "V — inverse")]` where `section` comes from
+[`grid_profiles`](@ref). Requires a Makie backend to be loaded
+(e.g. `using CairoMakie`) — implemented in the package extension.
+"""
+function plot_sections end
 
 # ---- Layer 0: types & configuration ------------------------------------------------
 include("types.jl")

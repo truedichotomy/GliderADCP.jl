@@ -23,7 +23,7 @@ Base.@kwdef struct InverseOptions
     wsmooth_glider::Float64 = 0.0   # glider-velocity curvature weight (off by default)
     wbt::Float64 = 5.0              # bottom-track row weight
     bt_max_dt::Float64 = 6.0        # s, BT fix → ping association tolerance
-    dac_form::Symbol = :ocean       # :ocean | :platform
+    dac_form::Symbol = :ocean       # :ocean | :ocean_timeweighted | :platform
     min_pings::Int = 30             # skip segments with fewer usable pings
     min_bin_obs::Int = 1            # trim edge bins with fewer observations
 end
@@ -40,7 +40,7 @@ from [`bt_velocity`](@ref)). Returns a NamedTuple
 """
 function invert_segment(E::AbstractMatrix, N::AbstractMatrix, celldepth::AbstractMatrix,
                         tping::AbstractVector, maxgliderdepth::Real;
-                        dacu::Real=NaN, dacv::Real=NaN, bt=nothing,
+                        dacu::Real=NaN, dacv::Real=NaN, bt=nothing, gliderdepth=nothing,
                         opts::InverseOptions=InverseOptions())
     ngrid, nt = size(E)
     dz = opts.dz
@@ -92,16 +92,22 @@ function invert_segment(E::AbstractMatrix, N::AbstractMatrix, celldepth::Abstrac
 
     # --- DAC constraint ---------------------------------------------------------------
     if isfinite(dacu) && isfinite(dacv) && opts.wdac > 0
-        if opts.dac_form === :ocean
+        if opts.dac_form === :ocean || opts.dac_form === :ocean_timeweighted
             covered = [k for k in 1:nz if (kmin + k - 2 + 0.5) * dz <= maxgliderdepth &&
                        nobs[k] > 0]
+            weights = if opts.dac_form === :ocean_timeweighted && gliderdepth !== nothing
+                # DAC is a time average: weight each bin by glider residence time
+                zcent = [(kmin + k - 2 + 0.5) * dz for k in 1:nz]
+                w = time_in_bin(gliderdepth, tping, zcent; dz)[covered]
+                sum(w) > 0 ? w ./ sum(w) : fill(1.0 / length(covered), length(covered))
+            else
+                fill(1.0 / max(1, length(covered)), length(covered))   # plain depth mean
+            end
             if !isempty(covered)
-                H = length(covered) * dz
-                c = dz / H
-                Cn = 1 / sqrt(length(covered) * c^2)     # unit-norm scaling (Gradone)
+                Cn = 1 / norm(weights)                   # unit-norm row scaling
                 r += 1
-                for k in covered
-                    addentry(r, nt + k, opts.wdac * Cn * c)
+                for (j, k) in enumerate(covered)
+                    addentry(r, nt + k, opts.wdac * Cn * weights[j])
                 end
                 push!(du, opts.wdac * Cn * dacu)
                 push!(dv, opts.wdac * Cn * dacv)
@@ -201,7 +207,7 @@ function solve_inverse(p::ProcessedPings, dac::DataFrame;
         isempty(gd) && continue
         sol = invert_segment(view(p.E, :, idx), view(p.N, :, idx),
             view(p.celldepth, :, idx), p.t[idx], maximum(gd);
-            dacu=row.u, dacv=row.v, bt=btseg, opts)
+            dacu=row.u, dacv=row.v, bt=btseg, gliderdepth=p.depth[idx], opts)
         sol === nothing && continue
         for k in eachindex(sol.z)
             push!(out, (row.yo, row.t_mid, sol.z[k], sol.u[k], sol.v[k],

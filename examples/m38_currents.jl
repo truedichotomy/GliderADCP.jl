@@ -116,19 +116,9 @@ CSV.write(joinpath(OUT, "M38_profiles_inverse.csv"), inv)
 CSV.write(joinpath(OUT, "M38_profiles_shear.csv"), shr)
 
 using CairoMakie
-nyo = length(sec.t)
-xt = round.(Int, range(1, nyo; length=8))
-xtl = Dates.format.(sec.t[xt], "dd u")
-fig = Figure(size=(1500, 950))
-for (row, A, ttl) in ((1, sec.U, "U (east) — inverse + bottom track"),
-                      (2, sec.V, "V (north) — inverse + bottom track"),
-                      (3, sec_s.U, "U (east) — shear method"))
-    ax = Axis(fig[row, 1]; ylabel="depth (m)", yreversed=true, title=ttl,
-        xticks=(xt, xtl), xlabel=row == 3 ? "2022–2023 (segment midpoints)" : "")
-    hm = heatmap!(ax, 1:nyo, sec.z, permutedims(A);
-        colormap=:balance, colorrange=(-0.5, 0.5))
-    row == 1 && Colorbar(fig[1:3, 2], hm; label="velocity (m/s)")
-end
+fig = plot_sections([(sec, :U, "U (east) — inverse + bottom track"),
+                     (sec, :V, "V (north) — inverse + bottom track"),
+                     (sec_s, :U, "U (east) — shear method")])
 save(joinpath(OUT, "M38_UV_sections.png"), fig)
 
 fig2 = Figure(size=(1200, 480))
