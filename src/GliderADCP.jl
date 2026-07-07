@@ -52,6 +52,7 @@ export InverseOptions, invert_segment, solve_inverse
 export ShearOptions, shear_segment, integrate_shear, solve_shear
 export magnetic_declination, grid_profiles, export_sections
 export load_pnor, slocum_nav, dac_from_slocum, time_in_bin, plot_sections
+export read_ad2cp
 
 """
     plot_sections(panels; colorrange=(-0.5, 0.5), colormap=:balance, figsize=...)

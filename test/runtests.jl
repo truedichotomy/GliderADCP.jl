@@ -574,6 +574,113 @@ end
         end
     end
 
+    @testset "native .ad2cp reader: synthetic binary" begin
+        cs(b) = GliderADCP._ad2cp_checksum(b)
+        le16(x) = reinterpret(UInt8, [UInt16(x)])
+        le32(x) = reinterpret(UInt8, [UInt32(x)])
+        function mkrec(id, payload)
+            hdr = UInt8[0xA5, 0x0A, id, 0x10, le16(length(payload))...,
+                le16(cs(payload))..., 0x00, 0x00]
+            hdr[9:10] = le16(cs(hdr[1:8]))
+            vcat(hdr, payload)
+        end
+        # string record with the instrument config dump
+        cfgtxt = "ID,STR=\"Glider\",SN=42\nGETPLAN,SA=35.0,FREQ=1000\n" *
+                 "GETAVG,NC=2,CS=1.00,BD=0.50,CY=\"BEAM\",VR=2.50\n" *
+                 "GETUSER,POFF=1.50,DECL=3.00\n" *
+                 "BEAMCFGLIST,BEAM=1,THETA=47.50,PHI=0.00\n" *
+                 "BEAMCFGLIST,BEAM=2,THETA=25.00,PHI=-90.00\n"
+        strrec = mkrec(0xA0, vcat(UInt8[0x10], Vector{UInt8}(cfgtxt), UInt8[0x00]))
+        # one DF3 average record: 2 cells × 4 beams, velocity+amplitude+correlation
+        p = zeros(UInt8, 76)
+        p[1] = 3; p[2] = 76                              # version, offsetOfData
+        p[3:4] = le16(0x00E0)                            # bits 5,6,7
+        p[5:8] = le32(42)                                # serial
+        p[9:14] = UInt8[122, 10, 4, 6, 0, 0]             # 2022-11-04T06:00:00
+        p[15:16] = le16(4380)                            # .438 s
+        p[17:18] = le16(15000)                           # sound speed 1500.0
+        p[19:20] = le16(750)                             # 7.50 °C
+        p[21:24] = le32(12345)                           # 12.345 dbar
+        p[25:26] = le16(9000)                            # heading 90.00°
+        p[27:28] = reinterpret(UInt8, [Int16(-1750)])    # pitch −17.50°
+        p[29:30] = reinterpret(UInt8, [Int16(100)])      # roll 1.00°
+        p[31:32] = le16(UInt16(2) | (UInt16(2) << 10) | (UInt16(4) << 12))  # 2 cells, BEAM, 4 beams
+        p[33:34] = le16(1000)                            # cell size 1.000 m
+        p[35:36] = le16(500)                             # blanking 0.500 m (mm scaling)
+        p[59] = reinterpret(UInt8, Int8(-3))             # velocity scaling 10^-3
+        p[73:76] = le32(7)                               # ensemble counter
+        velraw = Int16[100, 200, -300, -400, 500, 600, -700, -800]  # beam-major
+        amps = UInt8[140, 142, 144, 146, 148, 150, 152, 154]
+        corrs = UInt8[90, 91, 92, 93, 94, 95, 96, 97]
+        payload = vcat(p, reinterpret(UInt8, velraw), amps, corrs)
+        avgrec = mkrec(0x16, payload)
+        mktempdir() do d
+            f = joinpath(d, "syn.ad2cp")
+            # junk bytes between records exercise the resynchronization path
+            write(f, vcat(strrec, UInt8[0xFF, 0xA5, 0x00], avgrec))
+            a = @test_logs (:warn, r"resynchronized") read_ad2cp(f)
+            @test length(a) == 1
+            @test ncells(a) == 2
+            @test a.config.serial == 42
+            @test a.config.cellsize ≈ 1.0
+            @test a.config.blanking ≈ 0.5
+            @test a.config.coordsystem === :beam
+            @test a.config.declination ≈ 3.0
+            @test a.config.salinity_setting ≈ 35.0
+            @test a.config.beam_theta[1] == 47.5 && a.config.beam_phi[2] == -90.0
+            @test a.time[1] == DateTime(2022, 11, 4, 6, 0, 0, 438)
+            @test a.vel[1, 1, 1] ≈ 0.1f0 && a.vel[2, 1, 1] ≈ 0.2f0
+            @test a.vel[1, 2, 1] ≈ -0.3f0 && a.vel[2, 4, 1] ≈ -0.8f0
+            @test a.amp[1, 1, 1] ≈ 70.0f0                # counts × 0.5 dB
+            @test a.corr[2, 4, 1] ≈ 97.0f0
+            @test a.heading[1] ≈ 90.0f0 && a.pitch[1] ≈ -17.5f0
+            @test a.pressure[1] ≈ 12.345
+            @test a.ensemble[1] == 7.0
+            # corrupt the data checksum → record is dropped
+            buf = read(f)
+            buf[end] ⊻= 0xFF
+            f2 = joinpath(d, "bad.ad2cp")
+            write(f2, buf)
+            @test_throws Exception read_ad2cp(f2)       # no average records survive
+        end
+    end
+
+    M38_BIN = joinpath(M38_DIR, "ad2cp/102381_sea064_M38/sea064_M38.ad2cp")
+    if isfile(M38_BIN) && isfile(M38_NC)
+        @testset "M38 acceptance: native binary ≡ MIDAS netCDF" begin
+            a = read_ad2cp(M38_BIN)
+            b = load_ad2cp(M38_NC)
+            @test length(a) == length(b) == 124_752
+            @test a.time == b.time
+            same32(x, y) = (d = filter(isfinite, vec(x .- y)); isempty(d) ? 0.0 : maximum(abs.(d)))
+            @test same32(a.vel, b.vel) == 0
+            @test same32(a.amp, b.amp) == 0
+            @test same32(a.corr, b.corr) == 0
+            @test same32(a.heading, b.heading) == 0
+            @test same32(a.pitch, b.pitch) == 0
+            @test same32(a.roll, b.roll) == 0
+            @test same32(a.soundspeed, b.soundspeed) == 0
+            @test same32(a.temperature, b.temperature) == 0
+            @test same32(a.accel, b.accel) == 0
+            @test same32(a.mag, b.mag) == 0
+            @test maximum(abs.(a.pressure .- b.pressure)) < 1e-4   # MIDAS float32 rounding
+            @test a.ensemble == b.ensemble
+            @test a.config.cellsize == b.config.cellsize
+            @test a.config.blanking ≈ b.config.blanking atol = 1e-6
+            @test a.config.beam2xyz[1, 1] ≈ b.config.beam2xyz[1, 1] atol = 1e-6
+            @test a.range ≈ b.range atol = 1e-3
+            @test length(a.bt) == length(b.bt) == 124_751
+            @test same32(a.bt.vel, b.bt.vel) == 0
+            @test same32(a.bt.distance, b.bt.distance) == 0
+            @test same32(a.bt.fom, b.bt.fom) == 0
+            # dispatch through load_ad2cp
+            a2 = load_ad2cp(M38_BIN)
+            @test length(a2) == length(a)
+            @info "native .ad2cp reader ≡ MIDAS netCDF: bit-identical on M38 " *
+                  "($(length(a)) ensembles + $(length(a.bt)) BT records)"
+        end
+    end
+
     @testset "Aqua quality assurance" begin
         import Aqua
         Aqua.test_all(GliderADCP; ambiguities=false)

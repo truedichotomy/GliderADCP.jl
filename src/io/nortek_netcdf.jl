@@ -176,6 +176,10 @@ adcp.bt         # BottomTrackData (M38 has bottom track enabled)
 ```
 """
 function load_ad2cp(paths; plan::Symbol=:average)
+    # native binary files dispatch to the pure-Julia reader (no MIDAS required)
+    if paths isa AbstractString && isfile(paths) && endswith(lowercase(paths), ".ad2cp")
+        return read_ad2cp(paths; plan)
+    end
     files = _ad2cp_files(paths)
     isempty(files) && error("load_ad2cp: no input files found for $paths")
 
