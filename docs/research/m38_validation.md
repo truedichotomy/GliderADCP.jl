@@ -62,3 +62,47 @@ for this package.
   contributions when tuning for deep, quiet water.
 - Surface-drift comparison is noisy (windage/Stokes on a surfaced glider); it bounds
   gross errors but should not be over-interpreted below ~5 cm/s.
+
+## Why the shear and inverse methods disagree (2026-07-07 diagnosis)
+
+Pooled shear-vs-inverse agreement on M38 is r_u ≈ 0.58, rms ≈ 0.22 m/s, worst near the
+surface. Quantitative diagnosis (script results, full mission):
+
+1. **A measured range-dependent velocity bias.** The mission-mean *within-ping* relative
+   velocity, rotated into the glider track frame, decays with range: along-track slope
+   **−3.3×10⁻⁴ s⁻¹ (dives) and −3.1×10⁻⁴ s⁻¹ (climbs)** — same sign and size for both
+   cast directions — while the cross-track component is 10–100× smaller (−2×10⁻⁵ / +3×10⁻⁶).
+   Per cell the bias is tiny (±3.5 mm/s across the 30-m window); it is invisible to any
+   per-sample QC. This is the classic glider-ADCP "shear bias" (Todd et al. 2017;
+   gliderad2cp's `process_bias`, whose velocity-dependent variant exists for exactly this
+   speed-correlated, track-aligned signature).
+2. **The shear method integrates it; the inverse does not.** Integrating −3.2×10⁻⁴ s⁻¹
+   over a 500-m yo predicts a −0.16 m/s top-to-bottom tilt; the observed per-yo tilt of
+   (u_shear − u_inverse) is **median −4.6×10⁻⁴ s⁻¹ ≈ −0.23 m/s per 500 m** — same sign,
+   same order. DAC referencing then pivots the tilted profile about the yo's
+   (time-weighted) mean depth, so the shear solution comes out **+0.13 m/s too fast near
+   the surface and −0.10 m/s too slow at depth** (median u_inv − u_sh: −0.149 at 0–50 m,
+   +0.105 at 600–1000 m). In the inverse, each sample constrains only its own depth bin
+   against the per-ping glider unknown — the bias adds ~mm/s per bin instead of
+   integrating.
+3. **Independent surface arbiter.** Against surface GPS drift (z < 30 m bins):
+   inverse med|Δ| = 0.042 m/s, bias −0.025; **shear med|Δ| = 0.151 m/s, bias +0.111** —
+   the shear top is confirmed biased, the inverse is not.
+4. **Integrated noise.** Beyond the tilt, integrating per-bin shear noise random-walks:
+   rms(u_inv − u_sh) is 0.18–0.25 m/s at all depths, vs ~2 cm/s per-bin consistency for
+   the inverse (dive/climb check). The upper column additionally has ~3× fewer samples
+   per bin (median 46–67 vs ~180 at mid-depth) — sampled only during dive starts and
+   climb ends.
+5. **Inverse outliers noted:** 289 bins reach |u| up to 1.6 m/s at 345–605 m, all in
+   yos 8–18 (the slope-eddy transit, DAC up to 0.51 m/s). Cast-consistent (dive/climb
+   r = 0.98) so not a transform artifact, but flagged for the Phase-7 compass-deviation
+   check.
+
+**Conclusion:** the disagreement is a property of the *shear method* inheriting an
+integrable instrument bias plus integrated noise — not of the common trunk (shared by
+both methods) nor the inverse. The inverse (+ bottom track) sections are the reference
+product. **Phase-7 item 1:** shear-bias correction — subtract the mission-calibrated
+along-track bias profile b(r) before differencing (real ocean shear averages out of the
+track-frame mission mean under varied headings), and/or the gliderad2cp
+displacement-regression form; acceptance = shear-vs-inverse tilt collapse and drift-test
+parity.
