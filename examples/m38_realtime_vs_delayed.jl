@@ -1,4 +1,4 @@
-# Task 5: real-time vs delayed-mode products, sea064 M38 (NorSE Lofoten Basin).
+# Task 5: real-time vs delayed-mode products, sea064 M38 (NORSE Lofoten Basin).
 #
 # Question: how much ocean-velocity accuracy is lost by processing the real-time
 # $PNOR ASCII telemetry stream (0.01 m/s velocity quantization, 0.1° attitude, no

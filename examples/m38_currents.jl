@@ -1,4 +1,4 @@
-# End-to-end GliderADCP.jl example: sea064 M38 (NorSE Lofoten Basin, Nov 2022 – Mar 2023).
+# End-to-end GliderADCP.jl example: sea064 M38 (NORSE Lofoten Basin, Nov 2022 – Mar 2023).
 #
 # Full mission: MIDAS netCDF + SeaExplorer nav/payload → sound-speed correction → QC →
 # declination (IGRF) → ENU pings → DAC + bottom track → inverse & shear solutions →
@@ -108,7 +108,7 @@ end
 sec = grid_profiles(inv)
 sec_s = grid_profiles(shr)
 attrs = Dict{String,Any}(
-    "mission" => "sea064 M38, NorSE Lofoten Basin, 2022-11..2023-03",
+    "mission" => "sea064 M38, NORSE Lofoten Basin, 2022-11..2023-03",
     "instrument" => "Nortek Glider AD2CP 1 MHz SN102381",
     "declination" => "IGRF per ping",
     "qc_rejected_fraction" => round(qstats.total, digits=4))

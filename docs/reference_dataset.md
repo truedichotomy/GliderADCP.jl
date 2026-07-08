@@ -1,4 +1,4 @@
-# Reference dataset: sea064 M38 (NorSE Lofoten Basin, Nov 2022 – Mar 2023)
+# Reference dataset: sea064 M38 (NORSE Lofoten Basin, Nov 2022 – Mar 2023)
 
 Location: `/Users/gong/oceansensing Dropbox/C2PO/glider/gliderData/sea064-20221102-norse-lofoten-complete`
 

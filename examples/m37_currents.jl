@@ -1,4 +1,4 @@
-# End-to-end GliderADCP.jl example: sea064 M37 (NorSE Jan Mayen, Oct 2022).
+# End-to-end GliderADCP.jl example: sea064 M37 (NORSE Jan Mayen, Oct 2022).
 #
 # Exercises the full stack on a second mission: native .ad2cp binary (no MIDAS
 # export exists for this deployment) + multi-route SeaExplorer loading (glider-
