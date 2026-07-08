@@ -872,6 +872,29 @@ end
         end
     end
 
+    @testset "bt_valid false-lock screens" begin
+        t0 = DateTime(2022, 11, 4)
+        n = 6
+        times = t0 .+ Second.(600 .* (0:n-1))
+        mk(dist, press) = BottomTrackData(times, datetime2unix.(times),
+            fill(0.1f0, 4, n), repeat(dist', 4), fill(100.0f0, 4, n),
+            press, fill(90.0f0, n), fill(-17.0f0, n), fill(0.0f0, n),
+            fill(1490.0f0, n))
+        # near-field target (1.5 m) at 100 m depth, while the platform later reaches
+        # 500 m nearby: rejected by BOTH min_range and the bathymetry check
+        bt1 = mk(fill(1.5, n), [100.0, 100, 100, 500, 100, 100])
+        @test count(bt_valid(bt1)) == 0
+        # bathymetry check alone: rejects the five 100-m locks, but a false lock AT the
+        # deepest record has nothing deeper nearby to disprove it — min_range covers it
+        @test count(bt_valid(bt1; min_range=0.0)) == 4
+        @test count(bt_valid(bt1; min_range=0.0, bathymetry_check=false)) == 4n
+        # genuine approach: 15-m range at 480 m, deepest nearby record 490 m — kept
+        bt2 = mk(fill(15.0, n), [480.0, 485, 490, 488, 483, 480])
+        @test count(bt_valid(bt2)) == 4n
+        # range gate still applies
+        @test count(bt_valid(bt2; max_range=10.0)) == 0
+    end
+
     @testset "Aqua quality assurance" begin
         import Aqua
         Aqua.test_all(GliderADCP; ambiguities=false)
@@ -995,7 +1018,13 @@ end
             a0 = load_ad2cp(M38_NC)
             nav = load_seaexplorer_nav(M38_NAV)
             dac = compute_dac(nav)
-            btv = bt_velocity(a0; max_range=28.0)
+            # M38 has NO genuine seafloor locks: its BT record is a persistent near-field
+            # target (~1.7 m below the transducer) moving with the water. The hardened
+            # default screens must reject essentially all of it:
+            @test nrow(bt_velocity(a0; max_range=28.0)) < 100
+            # the unscreened record remains useful as a WATER-FRAME consistency check of
+            # the geometry chain (its "u_g" ≈ glider velocity relative to the water):
+            btv = bt_velocity(a0; max_range=28.0, min_range=0.0, bathymetry_check=false)
 
             csvpath = joinpath(M38_DIR, "ad2cp/m38_processed/absolute_ocean_vel.csv")
             ref = isfile(csvpath) ? CSV.read(csvpath, DataFrame) : nothing
@@ -1057,11 +1086,12 @@ end
             rv = cor(first.(vg_pairs), last.(vg_pairs))
             mdu = median(abs.(first.(ug_pairs) .- last.(ug_pairs)))
             mdv = median(abs.(first.(vg_pairs) .- last.(vg_pairs)))
-            @info "M38 inverse-vs-BT (independent): n=$(length(ug_pairs)), " *
-                  "r_u=$(round(ru, digits=3)), r_v=$(round(rv, digits=3)), " *
-                  "med|Δu_g|=$(round(mdu, digits=3)), med|Δv_g|=$(round(mdv, digits=3)) m/s"
+            @info "M38 inverse ug vs water-frame BT target (through-water consistency): " *
+                  "n=$(length(ug_pairs)), r_u=$(round(ru, digits=3)), r_v=$(round(rv, digits=3)), " *
+                  "med|Δu_g|=$(round(mdu, digits=3)), med|Δv_g|=$(round(mdv, digits=3)) m/s " *
+                  "(offset ≈ the water velocity; see m38_validation.md Task 3)"
             @test ru > 0.6 && rv > 0.6
-            @test mdu < 0.1 && mdv < 0.1
+            @test mdu < 0.15 && mdv < 0.15
 
             # regression vs the prior Python (Slocum-AD2CP-style) processing
             if ref !== nothing

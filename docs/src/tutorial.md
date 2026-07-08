@@ -226,6 +226,17 @@ shr = solve_shear(pings, dac)                 # the corrected second opinion
 w   = vertical_velocity(pings)                # w = U_rel + dP/dt, flight-model-free
 ```
 
+!!! warning "False bottom-track locks"
+    Glider BT records can be dominated by **false locks on near-field/water-borne
+    targets** (wake, scattering layers ~1–3 m below the transducer) whenever the real
+    seafloor is out of range. Such targets move with the water; feeding them to the
+    inverse as over-ground anchors contradicts the DAC and injects strong spurious
+    shear. `bt_valid`/`bt_velocity` therefore screen by default: `min_range = 5 m` and
+    an impossible-bathymetry test (implied bottom vs the platform's own deepest nearby
+    record). On the reference mission these screens correctly reject *all* 9,383
+    apparent fixes — check `nrow(bt_velocity(adcp))` before assuming you have usable
+    bottom track.
+
 ### The inverse (recommended primary product)
 
 Per fix-to-fix segment, unknowns ``m = [u_g(t_1..t_{nt});\, u_o(z_1..z_{nz})]`` with one

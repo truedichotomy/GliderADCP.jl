@@ -203,3 +203,62 @@ structure independently via hydrography/thermal wind.
 shear; use `solve_shear_profile` for internal-wave/finestructure statistics (shear
 variance) and QC; on low-heading-diversity legs expect the bias calibration to absorb
 some real track-aligned mean shear from the *direct* product only.
+
+## Task 3 (2026-07-08): the "strong shear at 300 m" — solved, and a defect found
+
+**Verdict: the feature was an artifact of false bottom-track locks, now screened out by
+default.** The investigation, in order:
+
+1. **Localization.** The strongest inverse shear concentrated at 275–415 m, mostly in
+   the slope-transit yos (peaks to 1.2×10⁻² s⁻¹ at ~295–395 m), with a milder
+   mission-wide elevation in the same band.
+2. **Sensitivity.** Smoothness weight: no effect. Referencing: decisive —
+   DAC-only median |shear| at 200–450 m in the transit yos is 4.4×10⁻⁴ s⁻¹;
+   adding bottom track raises it 10× to 4.2×10⁻³.
+3. **Hydrography veto.** The deep pycnocline sits at 160–260 m with
+   dσ₀/dz ≤ 0.16 kg/m³ per 100 m (N ≈ 4×10⁻³ s⁻¹): a sustained 10⁻² s⁻¹ shear there
+   would put Ri < ¼. Yo-pair thermal wind at 250–400 m supports only
+   ~2–5×10⁻⁵ s⁻¹. The measured relative velocities (raw tilt checks) show the smooth
+   DAC-only structure, not the sharp feature.
+4. **Root cause.** The BT-anchored "absolute" deep velocities were ≈ 0.00 m/s in every
+   transit yo while DAC and DAC-only inverse agreed at +0.2…+0.5 — the signature of a
+   target moving **with the water**. Classification of all 15,432 three-beam BT locks
+   (impossible-bathymetry test: platform later dove deeper than the implied bottom):
+   **99.7 % false**, locking on a persistent target 0.6–2.8 m below the transducer
+   (median 1.7 m) — near-field/wake, not seafloor (basin depth 1–3 km; the seafloor was
+   never within the 30-m BT range on this mission). Anchoring pings to a water-frame
+   target contradicts the earth-frame DAC; least squares dumps the contradiction into
+   the ocean profile as spurious shear near the top of the anchored depth range — and
+   pushes unanchored mid-depth bins to |u| up to 1.6 m/s (the previously flagged
+   yos-8–18 outliers, now fully explained; their dive/climb consistency was the blind
+   spot — both casts shared the same false anchors).
+5. **Fix.** `bt_valid` now defaults to `min_range = 5 m` (genuine seafloor approaches
+   have O(10 m) ranges; the false cluster is 0.6–2.8 m) plus an impossible-bathymetry
+   screen (implied bottom vs deepest platform record within ±2 h). On M38: 0 of 9,383
+   fixes survive (correct — there were no real locks), the transit shear collapses to
+   the DAC-only value, the |u| > 0.8 outliers drop from 289 bins to 0, and the
+   basin-wide 250–350 m elevation disappears (4.9×10⁻⁴, smoothly decaying with depth —
+   **the entire "300-m shear" was this artifact**).
+
+**Amendments to earlier claims (honesty pass):**
+- "Independent validation: DAC-only inverse u_g vs unseen bottom track r_v = 0.97,
+  med|Δ| ≈ 7 cm/s" — the BT reference was the water-frame target, so this validated the
+  **through-water** velocity content of the chain (still a real geometry check; the
+  7 cm/s offset ≈ the water speed), *not* an absolute over-ground reference.
+- "BT-anchored absolute deep velocities agree to 1.6 cm/s" — self-consistency of
+  water-frame anchoring, not an absolute check. Superseded.
+- The BT **sign-convention** check (w vs dP/dt, r = 0.90) survives: vertical motion
+  relative to a water-borne target still validates the sign chain.
+- Headline metrics that never involved BT stand unchanged: dive/climb r = 0.98
+  (2 cm/s), DAC closure 5 mm/s, surface drift 4 cm/s, raw-data tilt checks, all
+  synthetic and gliderad2cp parity results.
+- Task 1's mission-mean u-shear asymmetry: **was BT-injected**, not calibration
+  absorption (that hypothesis is retracted) — with hardened screens the DAC-only
+  inverse mission-mean u-shear std is 6.8×10⁻⁵ s⁻¹, consistent with the direct
+  product.
+
+**Physics answer to the original question:** there is no strong sub-inertial shear
+layer at 300 m in this mission. The real deep pycnocline (AW base) sits at 160–260 m
+with thermal-wind shear of order 10⁻⁵–10⁻⁴ s⁻¹, and the transit-eddy velocity
+structure is smooth across 200–450 m (≈4×10⁻⁴ s⁻¹), exactly as the DAC-only inverse
+and the raw relative velocities show.

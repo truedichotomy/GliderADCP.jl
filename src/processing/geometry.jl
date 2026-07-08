@@ -189,13 +189,13 @@ Columns: `time, t, u, v, w` (m/s over ground, ENU) and `range` (mean valid beam
 detection distance, m).
 """
 function bt_velocity(a::AD2CPData; look::Symbol=:auto, declination=0.0,
-                     max_range::Real=Inf)
+                     max_range::Real=Inf, kwargs...)
     a.bt === nothing && error("bt_velocity: dataset has no bottom-track group")
     bt = a.bt
     lk = look === :auto ? detect_look_direction(a) : look
     e = beam_unit_vectors(a.config)
     F = head2vehicle(lk)
-    valid = bt_valid(bt; max_range)
+    valid = bt_valid(bt; max_range, kwargs...)
     S = Dict(sel => inv(beams_matrix(e, sel)) for sel in ((1, 2, 4), (2, 3, 4)))
     decl(i) = declination isa Number ? Float64(declination) : Float64(declination[i])
     rows = NamedTuple[]

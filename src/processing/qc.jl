@@ -82,14 +82,44 @@ end
 """
     bt_valid(bt; max_range=Inf) -> BitMatrix (4 × ntime)
 
-Bottom-track validity: figure of merit ≠ 65535 (Nortek invalid marker), finite velocity,
-and detection distance within `(0, max_range]`.
+Bottom-track validity. Per-beam screens: figure of merit ≠ 65535 (Nortek invalid
+marker), finite velocity, and detection distance within `[min_range, max_range]`.
+Per-record screen (`bathymetry_check=true`): the implied bottom depth
+(instrument depth + vertical range) must not be contradicted by the platform itself
+diving deeper than it within ±`window` seconds (+`margin` m).
+
+Both extra screens target **false bottom locks on near-field/water-borne targets**
+(wake, scattering layers): on the reference mission, 99.7 % of "locks" were a
+persistent target 0.6–2.8 m below the transducer, moving with the water — anchoring
+the inverse to such targets contradicts the (earth-frame) DAC and injects strong
+spurious shear into the solution (see docs/research/m38_validation.md, Task 3).
+Genuine seafloor approaches have ranges of order 10 m or more, so `min_range = 5`
+rejects the near-field cluster while keeping real locks.
 """
-function bt_valid(bt::BottomTrackData; max_range::Real=Inf)
-    m = falses(4, length(bt))
-    for i in 1:length(bt), b in 1:4
+function bt_valid(bt::BottomTrackData; max_range::Real=Inf, min_range::Real=5.0,
+                  bathymetry_check::Bool=true, window::Real=7200.0, margin::Real=20.0)
+    n = length(bt)
+    m = falses(4, n)
+    for i in 1:n, b in 1:4
         m[b, i] = isfinite(bt.vel[b, i]) && bt.fom[b, i] != 65535 &&
-                  isfinite(bt.distance[b, i]) && 0 < bt.distance[b, i] <= max_range
+                  isfinite(bt.distance[b, i]) &&
+                  min_range <= bt.distance[b, i] <= max_range
+    end
+    if bathymetry_check
+        for i in 1:n
+            any(@view m[:, i]) || continue
+            isfinite(bt.pressure[i]) || continue
+            rng = [bt.distance[b, i] for b in 1:4 if m[b, i]]
+            bottom = bt.pressure[i] + mean(rng) * cosd(30)   # ≈ vertical range in flight
+            lo = searchsortedfirst(bt.t, bt.t[i] - window)
+            hi = searchsortedlast(bt.t, bt.t[i] + window)
+            deepest = -Inf
+            for j in lo:hi
+                isfinite(bt.pressure[j]) && bt.pressure[j] > deepest &&
+                    (deepest = bt.pressure[j])
+            end
+            deepest > bottom + margin && (m[:, i] .= false)
+        end
     end
     return m
 end

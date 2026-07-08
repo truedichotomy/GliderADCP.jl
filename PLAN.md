@@ -297,14 +297,16 @@ acceptance criteria pass.
    doesn't, and vice versa?), then decide: standardize on the more complete one, and
    either have one package depend on the other's loader or extract a shared minimal
    loader package.
-3. **Strong shear near 300 m in the inverse solution — real or artifact?** Ties back to
-   the yos-8–18 deep-velocity outliers already flagged (\|u\| to 1.6 m/s at 345–605 m,
-   confirmed cast-consistent and not a compass artifact — see `m38_validation.md`).
-   Investigate: (a) is it isolated to those yos or mission-wide/persistent; (b) does
-   bottom-track-only vs DAC-only referencing agree there; (c) does the CTD/payload
-   density structure show a front near 300 m at the same time (thermal-wind-consistent
-   real feature vs geometry/QC artifact at a specific depth); (d) per-yo (not just
-   mission-wide) compass field check for yos 8–18 specifically.
+3. **Strong shear near 300 m — RESOLVED (2026-07-08): artifact of false bottom-track
+   locks.** 99.7 % of M38's BT "fixes" were a near-field water-borne target ~1.7 m below
+   the transducer (the seafloor was never in range); anchoring to it contradicted the
+   DAC and injected the 300-m shear and the yos-8–18 outliers. Hydrography vetoes the
+   feature (pycnocline at 160–260 m; thermal wind ~10⁻⁵ s⁻¹; Ri < ¼ otherwise).
+   `bt_valid` hardened (min_range = 5 m + impossible-bathymetry screen, default-on);
+   earlier BT-validation claims amended in `m38_validation.md` §Task 3; Task 1's
+   mission-mean u-shear asymmetry traced to the same cause (calibration-absorption
+   hypothesis retracted).
+
 4. **`examples/m38_currents.jl` section figure fixes.** Add the missing shear-method
    **V** panel (only U is currently plotted); add **w** panel(s) from
    `vertical_velocity` for both methods; replace the fixed `colorrange=(-0.5, 0.5)` (it
