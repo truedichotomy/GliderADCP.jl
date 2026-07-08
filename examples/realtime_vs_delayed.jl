@@ -71,13 +71,45 @@ function compare_mission(cfg)
     nyo_d = length(unique(prods["delayed_inv"].yo))
     nyo_r = length(unique(prods["realtime_inv"].yo))
     @info "  yos solved — delayed: $nyo_d, real-time: $nyo_r"
-    return stats
+    return stats, prods
 end
 
 using CairoMakie
+sym99(As...) = quantile(abs.(reduce(vcat, [filter(isfinite, vec(A)) for A in As])), 0.99)
+# gridded section of the real-time − delayed difference on common (yo, z) bins
+function dgrid(s)
+    d = DataFrame(yo=s.j.yo[s.m], t_mid=s.j.t_mid[s.m], z=s.j.z[s.m],
+        u=s.j.u[s.m] .- s.j.u_1[s.m], v=s.j.v[s.m] .- s.j.v_1[s.m],
+        nobs=min.(s.j.nobs[s.m], s.j.nobs_1[s.m]))
+    grid_profiles(d)
+end
+
 for key in (isempty(ARGS) ? ["m37", "m59"] : lowercase.(ARGS))
     cfg = MISSIONS[key]
-    stats = compare_mission(cfg)
+    stats, prods = compare_mission(cfg)
+
+    # (a) side-by-side U/V sections, one shared color scale
+    sec_d = grid_profiles(prods["delayed_inv"])
+    sec_r = grid_profiles(prods["realtime_inv"])
+    crUV = ceil(sym99(sec_d.U, sec_d.V, sec_r.U, sec_r.V) * 20) / 20
+    figs = plot_sections([(sec_d, :U, "U (east) — delayed (.ad2cp binary)"),
+                          (sec_d, :V, "V (north) — delayed"),
+                          (sec_r, :U, "U (east) — real-time (\$PNOR stream)"),
+                          (sec_r, :V, "V (north) — real-time")];
+        colorrange=(-crUV, crUV))
+    save(joinpath(OUT, "$(cfg.label)_realtime_vs_delayed_sections.png"), figs)
+
+    # (b) difference sections (real-time − delayed), inverse + shear, amplified scale
+    dg_i, dg_s = dgrid(stats["inv u"]), dgrid(stats["shr u"])
+    crD = ceil(sym99(dg_s.U, dg_s.V) * 200) / 200
+    figd = plot_sections([(dg_i, :U, "ΔU — inverse (real-time − delayed)"),
+                          (dg_i, :V, "ΔV — inverse"),
+                          (dg_s, :U, "ΔU — shear method"),
+                          (dg_s, :V, "ΔV — shear method")];
+        colorrange=(-crD, crD))
+    save(joinpath(OUT, "$(cfg.label)_realtime_vs_delayed_diff_sections.png"), figd)
+
+    # (c) scatter + rms-by-depth summary
     fig = Figure(size=(1000, 420))
     su = stats["inv u"]
     ax1 = Axis(fig[1, 1]; xlabel="delayed u (m/s)", ylabel="real-time u (m/s)",
