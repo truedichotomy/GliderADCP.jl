@@ -328,3 +328,18 @@ pass `look` explicitly; BT records → irrelevant on M38, which has no genuine B
 magnetometer → declination comes from nav anyway) cost nothing here. (3) Prefer the
 shear method last in real-time settings: it is the one product measurably degraded
 (≈2.5 cm/s rms) by stream quantization.
+
+**Cross-mission confirmation (2026-07-08).** The same comparison run on M37
+(Jan Mayen, Oct 2022) and M59 (NESMA subtropical NW Atlantic, Jul–Aug 2024;
+`examples/realtime_vs_delayed.jl`):
+
+    M37: inverse r = 0.9987/0.9984 (u/v), rms 3.7/4.4 mm/s;  shear rms 21–22 mm/s;  w rms 0.5 mm/s
+    M59: inverse r = 0.9997/0.9996 (u/v), rms 5.1/5.0 mm/s;  shear rms 28–29 mm/s;  w rms 0.3 mm/s
+
+Both streams cover 100% of their pinging windows, both routes solve identical
+yo sets (107 and 154), and every bias is zero to 0.1 mm/s. Notably M59 holds
+the ~5 mm/s inverse agreement while the glider crosses a >1 m/s Gulf Stream
+jet — the real-time penalty does not scale with signal amplitude. The
+conclusion generalizes: a telemetry-stream inverse product is the delayed
+product to ~5 mm/s rms on every mission tested; only the shear method pays a
+measurable (2–3 cm/s) quantization cost.
