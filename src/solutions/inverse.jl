@@ -204,9 +204,10 @@ function solve_inverse(p::ProcessedPings, dac::DataFrame;
                        bt=nothing, opts::InverseOptions=InverseOptions())
     out = DataFrame(yo=Int[], t_mid=DateTime[], z=Float64[], u=Float64[], v=Float64[],
         nobs=Int[], nbt=Int[])
+    nfew = 0; nfail = 0
     for row in eachrow(dac)
         idx = segment_indices(p, row.t_start, row.t_end)
-        length(idx) >= opts.min_pings || continue
+        length(idx) >= opts.min_pings || (nfew += 1; continue)
         btseg = nothing
         if bt !== nothing
             t1, t2 = datetime2unix(row.t_start), datetime2unix(row.t_end)
@@ -218,12 +219,16 @@ function solve_inverse(p::ProcessedPings, dac::DataFrame;
         sol = invert_segment(view(p.E, :, idx), view(p.N, :, idx),
             view(p.celldepth, :, idx), p.t[idx], maximum(gd);
             dacu=row.u, dacv=row.v, bt=btseg, gliderdepth=p.depth[idx], opts)
-        sol === nothing && continue
+        sol === nothing && (nfail += 1; continue)
         for k in eachindex(sol.z)
             push!(out, (row.yo, row.t_mid, sol.z[k], sol.u[k], sol.v[k],
                 sol.nobs[k], sol.nbt))
         end
     end
+    nsolved = isempty(out) ? 0 : length(unique(out.yo))
+    nsolved < nrow(dac) &&
+        @info "solve_inverse: solved $nsolved of $(nrow(dac)) segments " *
+              "($nfew with fewer than $(opts.min_pings) pings, $nfail with no usable data)"
     return out
 end
 

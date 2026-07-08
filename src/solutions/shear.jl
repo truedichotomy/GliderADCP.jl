@@ -118,12 +118,13 @@ bridged (integrated-through) values flagged by `nobs = 0`.
 function solve_shear(p::ProcessedPings, dac::DataFrame; opts::ShearOptions=ShearOptions())
     out = DataFrame(yo=Int[], t_mid=DateTime[], z=Float64[], u=Float64[], v=Float64[],
         nobs=Int[])
+    nskip = 0
     for row in eachrow(dac)
         idx = segment_indices(p, row.t_start, row.t_end)
-        length(idx) >= opts.min_pings || continue
+        length(idx) >= opts.min_pings || (nskip += 1; continue)
         seg = shear_segment(view(p.E, :, idx), view(p.N, :, idx),
             view(p.celldepth, :, idx), p.offsets; opts)
-        seg === nothing && continue
+        seg === nothing && (nskip += 1; continue)
         u_bc = integrate_shear(seg.z, seg.sh_u, opts.dz)
         v_bc = integrate_shear(seg.z, seg.sh_v, opts.dz)
         gd = filter(isfinite, p.depth[idx])
@@ -146,6 +147,10 @@ function solve_shear(p::ProcessedPings, dac::DataFrame; opts::ShearOptions=Shear
                 seg.nobs[k]))
         end
     end
+    nsolved = isempty(out) ? 0 : length(unique(out.yo))
+    nsolved < nrow(dac) &&
+        @info "solve_shear: solved $nsolved of $(nrow(dac)) segments " *
+              "(skipped: too few pings, no usable data, or no DAC-covered bins)"
     return out
 end
 

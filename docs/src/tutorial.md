@@ -90,6 +90,27 @@ For Slocum gliders, build the equivalents from any dbd-derived table (ERDDAP, Py
 [JLDBDReader.jl](https://github.com/truedichotomy/JLDBDReader.jl)) with
 [`slocum_nav`](@ref) and [`dac_from_slocum`](@ref).
 
+### Missing data, gaps and coverage
+
+Real missions are messy: segments fail to transfer, files arrive truncated, the ADCP is
+duty-cycled, navigation has holes. Every loader degrades gracefully — corrupt or
+unreadable files are skipped with a specific warning (never a crash), the binary reader
+resynchronizes past corrupt bytes and reports truncated tails, and gaps are surfaced
+rather than silently swallowed:
+
+```julia
+missing_segments(dir, "gli.sub")   # absent segment numbers in the transfer sequence
+data_gaps(adcp)                    # DataFrame of time gaps (auto threshold)
+coverage(adcp)                     # span, gaps, finite-data fractions, BT count
+coverage(nav); coverage(pings)     # same for navigation and processed pings
+```
+
+Downstream, NaN is the universal missing-data marker; solvers skip unusable segments
+and log a summary ("solved 127 of 190 segments …"), and `magnetic_declination`
+constant-extrapolates (with a warning) outside navigation coverage rather than silently
+dropping pings. On the reference mission, `coverage` reports 72 recording gaps
+totalling 104 days — the ADCP's duty cycle — at a glance.
+
 ## 3. Sound-speed correction
 
 Beam velocities scale linearly with the sound speed at the transducer

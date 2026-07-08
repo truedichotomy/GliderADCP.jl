@@ -56,6 +56,7 @@ export load_pnor, slocum_nav, dac_from_slocum, time_in_bin, plot_sections
 export read_ad2cp
 export shear_bias, apply_shear_bias!, calibrate_shear_bias!
 export vertical_velocity, glider_w, solve_w, compass_field_check
+export coverage, data_gaps, missing_segments
 
 """
     plot_sections(panels; colorrange=(-0.5, 0.5), colormap=:balance, figsize=...)
@@ -90,6 +91,7 @@ include("processing/declination.jl")
 include("processing/pipeline.jl")  # ProcessedPings orchestration (Layer 2-3 chain)
 include("processing/shearbias.jl") # range-dependent bias calibration
 include("processing/compass.jl")   # magnetometer health diagnostics
+include("processing/coverage.jl")  # data-coverage and gap reporting
 
 # ---- Layer 4: velocity solutions ----------------------------------------------------
 include("solutions/shear.jl")

@@ -65,7 +65,8 @@ function _scan_ad2cp(buf::Vector{UInt8}; validate::Bool=true)
         ok && push!(recs, (id=buf[pos+2], start=pos + 10, size=dsz))
         pos += 10 + dsz
     end
-    return recs, nresync
+    ntrail = n - pos + 1              # bytes of a truncated final record, if any
+    return recs, nresync, max(ntrail, 0)
 end
 
 _bit(x, k) = (x >> k) & 0x1 == 1
@@ -148,9 +149,10 @@ skipped (counted in a `@warn`).
 function read_ad2cp(path::AbstractString; plan::Symbol=:average,
                     validate_checksums::Bool=true)
     buf = read(path)
-    recs, nresync = _scan_ad2cp(buf; validate=validate_checksums)
+    recs, nresync, ntrail = _scan_ad2cp(buf; validate=validate_checksums)
     isempty(recs) && error("read_ad2cp: no valid records in $path")
     nresync > 0 && @warn "read_ad2cp: resynchronized past $nresync corrupt bytes"
+    ntrail > 10 && @warn "read_ad2cp: file ends mid-record ($ntrail trailing bytes unparsed — truncated download?)"
 
     want = plan === :burst ? 0x15 : 0x16
     prof = [r for r in recs if r.id == want]

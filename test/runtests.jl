@@ -92,6 +92,47 @@ function write_synthetic_gli(path; nrows=4)
     return path
 end
 
+"Synthetic .ad2cp records: (string-config record, one DF3 average record)."
+function synthetic_ad2cp_records()
+    cs(b) = GliderADCP._ad2cp_checksum(b)
+    le16(x) = reinterpret(UInt8, [UInt16(x)])
+    le32(x) = reinterpret(UInt8, [UInt32(x)])
+    function mkrec(id, payload)
+        hdr = UInt8[0xA5, 0x0A, id, 0x10, le16(length(payload))...,
+            le16(cs(payload))..., 0x00, 0x00]
+        hdr[9:10] = le16(cs(hdr[1:8]))
+        vcat(hdr, payload)
+    end
+    cfgtxt = "ID,STR=\"Glider\",SN=42\nGETPLAN,SA=35.0,FREQ=1000\n" *
+             "GETAVG,NC=2,CS=1.00,BD=0.50,CY=\"BEAM\",VR=2.50\n" *
+             "GETUSER,POFF=1.50,DECL=3.00\n" *
+             "BEAMCFGLIST,BEAM=1,THETA=47.50,PHI=0.00\n" *
+             "BEAMCFGLIST,BEAM=2,THETA=25.00,PHI=-90.00\n"
+    strrec = mkrec(0xA0, vcat(UInt8[0x10], Vector{UInt8}(cfgtxt), UInt8[0x00]))
+    p = zeros(UInt8, 76)
+    p[1] = 3; p[2] = 76                              # version, offsetOfData
+    p[3:4] = le16(0x00E0)                            # bits 5,6,7
+    p[5:8] = le32(42)                                # serial
+    p[9:14] = UInt8[122, 10, 4, 6, 0, 0]             # 2022-11-04T06:00:00
+    p[15:16] = le16(4380)                            # .438 s
+    p[17:18] = le16(15000)                           # sound speed 1500.0
+    p[19:20] = le16(750)                             # 7.50 °C
+    p[21:24] = le32(12345)                           # 12.345 dbar
+    p[25:26] = le16(9000)                            # heading 90.00°
+    p[27:28] = reinterpret(UInt8, [Int16(-1750)])    # pitch −17.50°
+    p[29:30] = reinterpret(UInt8, [Int16(100)])      # roll 1.00°
+    p[31:32] = le16(UInt16(2) | (UInt16(2) << 10) | (UInt16(4) << 12))
+    p[33:34] = le16(1000)                            # cell size 1.000 m
+    p[35:36] = le16(500)                             # blanking 0.500 m (mm scaling)
+    p[59] = reinterpret(UInt8, Int8(-3))             # velocity scaling 10^-3
+    p[73:76] = le32(7)                               # ensemble counter
+    velraw = Int16[100, 200, -300, -400, 500, 600, -700, -800]
+    amps = UInt8[140, 142, 144, 146, 148, 150, 152, 154]
+    corrs = UInt8[90, 91, 92, 93, 94, 95, 96, 97]
+    payload = vcat(p, reinterpret(UInt8, velraw), amps, corrs)
+    return strrec, mkrec(0x16, payload)
+end
+
 @testset "GliderADCP.jl" begin
 
     @testset "nmea2deg" begin
@@ -592,45 +633,7 @@ end
     end
 
     @testset "native .ad2cp reader: synthetic binary" begin
-        cs(b) = GliderADCP._ad2cp_checksum(b)
-        le16(x) = reinterpret(UInt8, [UInt16(x)])
-        le32(x) = reinterpret(UInt8, [UInt32(x)])
-        function mkrec(id, payload)
-            hdr = UInt8[0xA5, 0x0A, id, 0x10, le16(length(payload))...,
-                le16(cs(payload))..., 0x00, 0x00]
-            hdr[9:10] = le16(cs(hdr[1:8]))
-            vcat(hdr, payload)
-        end
-        # string record with the instrument config dump
-        cfgtxt = "ID,STR=\"Glider\",SN=42\nGETPLAN,SA=35.0,FREQ=1000\n" *
-                 "GETAVG,NC=2,CS=1.00,BD=0.50,CY=\"BEAM\",VR=2.50\n" *
-                 "GETUSER,POFF=1.50,DECL=3.00\n" *
-                 "BEAMCFGLIST,BEAM=1,THETA=47.50,PHI=0.00\n" *
-                 "BEAMCFGLIST,BEAM=2,THETA=25.00,PHI=-90.00\n"
-        strrec = mkrec(0xA0, vcat(UInt8[0x10], Vector{UInt8}(cfgtxt), UInt8[0x00]))
-        # one DF3 average record: 2 cells × 4 beams, velocity+amplitude+correlation
-        p = zeros(UInt8, 76)
-        p[1] = 3; p[2] = 76                              # version, offsetOfData
-        p[3:4] = le16(0x00E0)                            # bits 5,6,7
-        p[5:8] = le32(42)                                # serial
-        p[9:14] = UInt8[122, 10, 4, 6, 0, 0]             # 2022-11-04T06:00:00
-        p[15:16] = le16(4380)                            # .438 s
-        p[17:18] = le16(15000)                           # sound speed 1500.0
-        p[19:20] = le16(750)                             # 7.50 °C
-        p[21:24] = le32(12345)                           # 12.345 dbar
-        p[25:26] = le16(9000)                            # heading 90.00°
-        p[27:28] = reinterpret(UInt8, [Int16(-1750)])    # pitch −17.50°
-        p[29:30] = reinterpret(UInt8, [Int16(100)])      # roll 1.00°
-        p[31:32] = le16(UInt16(2) | (UInt16(2) << 10) | (UInt16(4) << 12))  # 2 cells, BEAM, 4 beams
-        p[33:34] = le16(1000)                            # cell size 1.000 m
-        p[35:36] = le16(500)                             # blanking 0.500 m (mm scaling)
-        p[59] = reinterpret(UInt8, Int8(-3))             # velocity scaling 10^-3
-        p[73:76] = le32(7)                               # ensemble counter
-        velraw = Int16[100, 200, -300, -400, 500, 600, -700, -800]  # beam-major
-        amps = UInt8[140, 142, 144, 146, 148, 150, 152, 154]
-        corrs = UInt8[90, 91, 92, 93, 94, 95, 96, 97]
-        payload = vcat(p, reinterpret(UInt8, velraw), amps, corrs)
-        avgrec = mkrec(0x16, payload)
+        strrec, avgrec = synthetic_ad2cp_records()
         mktempdir() do d
             f = joinpath(d, "syn.ad2cp")
             # junk bytes between records exercise the resynchronization path
@@ -903,6 +906,103 @@ end
         @test count(bt_valid(bt2)) == 4n
         # range gate still applies
         @test count(bt_valid(bt2; max_range=10.0)) == 0
+    end
+
+    @testset "robustness: corrupt and missing inputs" begin
+        # --- SeaExplorer: missing + corrupt segments ---
+        mktempdir() do d
+            write_synthetic_gli(joinpath(d, "sea064.38.gli.sub.1.gz"); nrows=4)
+            write_synthetic_gli(joinpath(d, "sea064.38.gli.sub.2.gz"); nrows=3)
+            write_synthetic_gli(joinpath(d, "sea064.38.gli.sub.5.gz"); nrows=3)
+            write(joinpath(d, "sea064.38.gli.sub.3.gz"), UInt8[0x1f, 0x8b, 0xde, 0xad])
+            @test missing_segments(d, "gli.sub") == [4]
+            nav = @test_logs (:warn, r"missing segment") (:warn, r"skipping unreadable") match_mode = :any load_seaexplorer_nav(d)
+            @test length(nav) == 10                      # rows from the 3 good segments
+        end
+        # --- load_ad2cp: corrupt netCDF alongside a good one ---
+        mktempdir() do d
+            write_synthetic_midas(joinpath(d, "syn.ad2cp.00000.nc"))
+            write(joinpath(d, "syn.ad2cp.00001.nc"), UInt8.(mod.(1:256, 251)))
+            a = @test_logs (:warn, r"skipping unreadable") match_mode = :any load_ad2cp(d)
+            @test length(a) == 6
+        end
+        # --- native binary: truncated final record ---
+        strrec, avgrec = synthetic_ad2cp_records()
+        mktempdir() do d
+            f = joinpath(d, "trunc.ad2cp")
+            write(f, vcat(strrec, avgrec, avgrec[1:end-25]))
+            a = @test_logs (:warn, r"mid-record") match_mode = :any read_ad2cp(f)
+            @test length(a) == 1
+        end
+        # --- load_pnor: corrupt gz skipped, good plain file parsed ---
+        mktempdir() do d
+            lines = ["\$PNORI,4,Glider42,4,2,0.70,2.00,2*00",
+                "\$PNORS,110422,062254,0,0,11.5,1485.1,114.1,19.8,8.3,4.765,7.68,0,0*00",
+                "\$PNORC,110422,062254,1,-0.24,-0.01,0.24,-0.01,,,C,133,126,151,116,100,100,100,99*00",
+                "\$PNORC,110422,062254,2,-0.20,0.0,0.2,0.0,,,C,130,120,150,110,95,96,97,98*00"]
+            write(joinpath(d, "sea064.38.ad2cp.raw.1"), join(lines, "\n"))
+            write(joinpath(d, "sea064.38.ad2cp.raw.2.gz"), UInt8[0x1f, 0x8b, 0x00])
+            a = @test_logs (:warn, r"skipping unreadable") match_mode = :any load_pnor(d;
+                validate_checksum=false)
+            @test length(a) == 1
+            @test ncells(a) == 2
+            @test a.vel[1, 1, 1] ≈ -0.24f0
+        end
+        # --- solvers: empty and starved segment tables never throw ---
+        t0 = DateTime(2022, 11, 4)
+        nt = 50
+        times = t0 .+ Second.(10 .* (0:nt-1))
+        offsets = collect(0.0:1.0:10.0)
+        depth = fill(50.0, nt)
+        pp = ProcessedPings(times, datetime2unix.(times), depth, fill(90.0, nt), offsets,
+            fill(0.1, 11, nt), fill(0.0, 11, nt), zeros(11, nt), offsets .+ depth',
+            :down, fill((1, 2, 4), nt))
+        emptydac = DataFrame(yo=Int[], t_start=DateTime[], t_end=DateTime[],
+            t_mid=DateTime[], u=Float64[], v=Float64[])
+        @test isempty(solve_inverse(pp, emptydac))
+        @test isempty(solve_shear(pp, emptydac))
+        starved = DataFrame(yo=[1], t_start=[times[1]], t_end=[times[3]],
+            t_mid=[times[2]], u=[0.0], v=[0.0])          # 3 pings < min_pings
+        out = @test_logs (:info, r"solved 0 of 1") solve_inverse(pp, starved)
+        @test isempty(out)
+        # --- declination: constant extrapolation outside nav coverage ---
+        navt = t0 .+ Hour.(0:2)
+        nav = GliderNav(navt, datetime2unix.(navt), fill(5.0, 3), fill(69.5, 3),
+            fill(90.0, 3), zeros(3), zeros(3), zeros(3), fill(10.0, 3),
+            fill(Int16(110), 3), fill(Int8(1), 3), fill(-1.0, 3), DataFrame())
+        tq = datetime2unix.(t0 .+ Hour.(-2:6))
+        decl = @test_logs (:warn, r"extrapolated") match_mode = :any magnetic_declination(nav, tq)
+        @test all(isfinite, decl)
+        @test decl[1] == decl[2]                         # leading constant fill
+        @test decl[end] == decl[end-1]
+        # --- data_gaps / coverage ---
+        g = data_gaps([0.0, 10, 20, 1000, 1010])
+        @test nrow(g) == 1
+        @test g.duration[1] == 980
+        mktempdir() do d
+            f = write_synthetic_midas(joinpath(d, "syn.ad2cp.00000.nc"))
+            a = load_ad2cp(f)
+            cov = coverage(a)
+            @test cov.n == 6
+            @test cov.median_dt == 10.0
+            @test isempty(cov.gaps)
+            @test cov.finite_vel == 1.0
+            @test cov.n_bt == 5
+        end
+    end
+
+    if isfile(M38_NC) && isdir(M38_NAV)
+        @testset "M38 acceptance: coverage reporting" begin
+            a = load_ad2cp(M38_NC)
+            cov = coverage(a)
+            @test cov.n == 124_752
+            @test nrow(cov.gaps) > 10                    # duty-cycled mission
+            @test cov.gap_total > 50 * 86400             # ADCP off most of Dec-Feb
+            @test isempty(missing_segments(M38_NAV, "gli.sub"))
+            @info "M38 coverage: $(nrow(cov.gaps)) gaps totalling " *
+                  "$(round(cov.gap_total / 86400, digits=1)) days; " *
+                  "finite vel fraction $(round(cov.finite_vel, digits=2))"
+        end
     end
 
     @testset "Aqua quality assurance" begin

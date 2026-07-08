@@ -183,7 +183,19 @@ function load_ad2cp(paths; plan::Symbol=:average)
     files = _ad2cp_files(paths)
     isempty(files) && error("load_ad2cp: no input files found for $paths")
 
-    loaded = [_load_one(f, plan) for f in files]
+    loaded = []
+    okfiles = String[]
+    for f in files
+        try
+            push!(loaded, _load_one(f, plan))
+            push!(okfiles, f)
+        catch err
+            @warn "load_ad2cp: skipping unreadable file" file = basename(f) error = sprint(showerror, err)
+        end
+    end
+    isempty(loaded) &&
+        error("load_ad2cp: no readable files (all $(length(files)) failed)")
+    files = okfiles
     payloads = first.(loaded)
 
     # consistency across files

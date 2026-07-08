@@ -63,7 +63,12 @@ function load_pnor(src; stream::AbstractString="ad2cp.raw", validate_checksum::B
     cur = nothing                    # current ensemble datetime
 
     for f in files
-        raw = endswith(f, ".gz") ? open(io -> read(GzipDecompressorStream(io)), f) : read(f)
+        raw = try
+            endswith(f, ".gz") ? open(io -> read(GzipDecompressorStream(io)), f) : read(f)
+        catch err
+            @warn "load_pnor: skipping unreadable file" file = basename(f) error = sprint(showerror, err)
+            continue
+        end
         for line in eachline(IOBuffer(raw))
             line = strip(line)
             startswith(line, "\$PNOR") || continue

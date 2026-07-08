@@ -327,20 +327,16 @@ acceptance criteria pass.
    independently, and quantify how close the resulting ocean-velocity products are —
    this bounds how good a real-time/onboard product could be relative to the delayed
    full-resolution reprocessing.
-6. **Robust missing-data handling across the whole stack, with clear reporting.** Every
-   loader and solver should degrade gracefully — never crash — when data is missing,
-   gapped, or corrupt, at any level: absent/corrupt segment files (nav `gli`, payload
-   `pld1`/`p`/`q` files, AD2CP binary/netCDF), time gaps or partial sensor coverage
-   within a file, a whole yo with no nav or no CTD coverage, truncated/corrupt binary
-   records (the native reader already resyncs past bad bytes — extend that pattern
-   everywhere). Crucially, gaps must be **surfaced, not silently swallowed**: some
-   consistent, structured notification of exactly what was missing/skipped and where
-   (e.g. missing segment numbers in a natural-sort sequence, ensemble/time-gap
-   statistics, which fields fell back to NaN, resync/drop counts) — a coverage-report
-   object returned alongside the data, or at minimum clear `@warn`/`@info` logging, is
-   probably the right shape; decide the concrete design when implementing. Add tests
-   with deliberately-gapped/corrupted synthetic inputs (missing segment files, holes in
-   the middle of a mission, truncated binary, a yo with no nav) to lock in the behavior.
+6. **Robust missing-data handling — DONE (2026-07-08).** All loaders skip
+   corrupt/unreadable inputs with specific warnings (SeaExplorer per-segment, netCDF
+   per-file, `$PNOR` per-file; binary reader already resynced and now also reports
+   truncated tails); `missing_segments` detects transfer gaps; `magnetic_declination`
+   constant-extrapolates outside nav coverage instead of silently dropping pings;
+   solvers log solved-of-total summaries; new `coverage`/`data_gaps` structured
+   reports (AD2CPData/GliderNav/ProcessedPings). Locked in by a robustness testset with
+   deliberately corrupted gz/netCDF/binary/PNOR inputs, starved/empty segment tables,
+   and coverage units; M38 acceptance: 72 gaps totalling 104 days (duty cycle) reported,
+   nav segment sequence complete.
 
 ## 9. Risks & open questions
 

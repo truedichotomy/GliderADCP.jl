@@ -38,5 +38,21 @@ function magnetic_declination(nav::GliderNav, t::AbstractVector; every::Real=360
         (isfinite(latk[i]) && isfinite(lonk[i])) || continue
         dk[i] = magnetic_declination(latk[i], lonk[i], unix2datetime(knots[i]))
     end
-    return _interp1(knots, dk, collect(Float64, t))
+    out = _interp1(knots, dk, collect(Float64, t))
+    # constant-extrapolate at the edges: declination varies slowly, and NaN declination
+    # would silently drop every affected ping from the ENU transform downstream
+    fin = findall(isfinite, out)
+    if !isempty(fin) && length(fin) < length(out)
+        nfix = 0
+        first_v = out[fin[1]]; last_v = out[fin[end]]
+        for i in 1:fin[1]-1
+            out[i] = first_v; nfix += 1
+        end
+        for i in fin[end]+1:length(out)
+            out[i] = last_v; nfix += 1
+        end
+        nfix > 0 && @warn "magnetic_declination: constant-extrapolated $nfix pings " *
+                          "outside navigation coverage"
+    end
+    return out
 end

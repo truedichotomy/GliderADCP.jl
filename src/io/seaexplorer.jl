@@ -58,8 +58,19 @@ end
 function _read_stream(files::AbstractVector{<:AbstractString}; timestamp_col::String,
                       fmts, mintime::Union{DateTime,Nothing})
     isempty(files) && error("no SeaExplorer files to read")
-    dfs = [_read_segment(f; timestamp_col) for f in files]
+    dfs = DataFrame[]
+    for f in files
+        try
+            push!(dfs, _read_segment(f; timestamp_col))
+        catch err
+            @warn "SeaExplorer stream: skipping unreadable file" file = basename(f) error = sprint(showerror, err)
+        end
+    end
+    isempty(dfs) &&
+        error("no readable SeaExplorer files (all $(length(files)) failed to parse)")
     df = reduce((a, b) -> vcat(a, b; cols=:union), dfs)
+    hasproperty(df, timestamp_col) ||
+        error("SeaExplorer stream: timestamp column `$timestamp_col` not found in any file")
     parse1(t) = begin
         t === missing && return missing
         for fmt in fmts
@@ -86,6 +97,23 @@ _int_col(df, name, ::Type{T}, default) where {T} = hasproperty(df, name) ?
     T.(coalesce.(df[!, name], default)) : fill(T(default), nrow(df))
 
 """
+    missing_segments(dir, stream) -> Vector{Int}
+
+Segment numbers absent from an otherwise consecutive SeaExplorer stream sequence
+(e.g. `sea064.38.gli.sub.<N>` with N = 1…max): the gaps in mission file transfer.
+"""
+function missing_segments(dir::AbstractString, stream::AbstractString)
+    pat = Regex("\\." * replace(stream, "." => "\\.") * "\\.(\\d+)(\\.gz)?\$")
+    nums = Int[]
+    for f in readdir(dir)
+        m = match(pat, f)
+        m === nothing || push!(nums, parse(Int, m.captures[1]))
+    end
+    isempty(nums) && return Int[]
+    return setdiff(minimum(nums):maximum(nums), nums)
+end
+
+"""
     load_seaexplorer_nav(src; stream="gli.sub", mintime=DateTime(2000)) -> GliderNav
 
 Read SeaExplorer navigation files (`.gli`) into a [`GliderNav`](@ref). `src` is a
@@ -101,6 +129,11 @@ nav = load_seaexplorer_nav("…/delayed/nav/logs")
 function load_seaexplorer_nav(src; stream::AbstractString="gli.sub",
                               mintime::Union{DateTime,Nothing}=DateTime(2000))
     files = src isa AbstractVector ? String.(src) : seaexplorer_files(src, stream)
+    if !(src isa AbstractVector)
+        miss = missing_segments(src, stream)
+        isempty(miss) ||
+            @warn "SeaExplorer $stream: missing segment numbers" missing = miss
+    end
     df = _read_stream(files; timestamp_col="Timestamp", fmts=(_SEAEXPLORER_NAV_FMT,), mintime)
     time = Vector{DateTime}(df.time)
     GliderNav(time, datetime2unix.(time),
@@ -132,6 +165,11 @@ pld = load_seaexplorer_pld("…/delayed/pld1/logs"; stream="legato.raw")
 function load_seaexplorer_pld(src; stream::AbstractString="pld1.raw",
                               mintime::Union{DateTime,Nothing}=DateTime(2000))
     files = src isa AbstractVector ? String.(src) : seaexplorer_files(src, stream)
+    if !(src isa AbstractVector)
+        miss = missing_segments(src, stream)
+        isempty(miss) ||
+            @warn "SeaExplorer $stream: missing segment numbers" missing = miss
+    end
     _read_stream(files; timestamp_col="PLD_REALTIMECLOCK",
         fmts=(_SEAEXPLORER_PLD_FMT, _SEAEXPLORER_NAV_FMT), mintime)
 end
