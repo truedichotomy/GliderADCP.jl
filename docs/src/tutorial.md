@@ -98,7 +98,10 @@ The file parsing behind these lives in
 ATOMIXjulia.jl): corrupt segment files are skipped with a warning, missing segment
 numbers are reported, and coordinate columns arrive in decimal degrees. For large
 payload streams, `SeaExplorerIO.read_pld(dir, ["LEGATO_TEMPERATURE", …])` reads only
-the columns you name.
+the columns you name. Missions downloaded several ways — glider-computer files plus a
+GLIMPSE-server export directory — can be passed together as a vector of directories:
+everything is loaded once, duplicate timestamps are deduplicated with the highest
+resolution preserved, and GLIMPSE-only derived columns come along.
 
 For Slocum gliders, build the equivalents from any dbd-derived table (ERDDAP, Python
 `dbdreader`, or the pure-Julia

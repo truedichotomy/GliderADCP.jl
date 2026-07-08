@@ -36,13 +36,16 @@ end
 
 Read SeaExplorer navigation files (`.gli`) into a [`GliderNav`](@ref). `src` is a
 directory (all segments of `stream`, naturally sorted, with a warning listing any
-missing segment numbers) or an explicit vector of file paths. Positions are converted
-from NMEA to decimal degrees. Records timestamped before `mintime` (boot records logged
-before the clock is set, stamped 1970) are dropped; pass `mintime=nothing` to keep
-everything.
+missing segment numbers), an explicit vector of file paths, or a vector of directories
+covering several download routes — e.g. glider-computer files plus a GLIMPSE-server
+export dir — which are merged and deduplicated by timestamp (earlier directories win;
+see `SeaExplorerIO.merge_tables`). Positions are converted from NMEA to decimal
+degrees. Records timestamped before `mintime` (boot records logged before the clock is
+set, stamped 1970) are dropped; pass `mintime=nothing` to keep everything.
 
 ```julia
 nav = load_seaexplorer_nav("…/delayed/nav/logs")
+nav = load_seaexplorer_nav(["…/delayed/nav/logs", "…/glimpse"])   # both routes, deduped
 ```
 """
 function load_seaexplorer_nav(src; stream::AbstractString="gli.sub",
@@ -64,16 +67,23 @@ end
 
 Read SeaExplorer payload science files (`pld1`, `legato`, …) into a time-sorted
 `DataFrame` with a `time::DateTime` column; science columns are `Float64` with
-`missing` for empty cells. Known coordinate columns (`NAV_LATITUDE`/`NAV_LONGITUDE`)
-are converted from NMEA to decimal degrees. `src` is a directory or a vector of file
-paths — pass a subset of segments (or use `SeaExplorerIO.read_pld` with a column
-selection) to limit memory on full-resolution streams.
+`missing` for empty cells (±9999 instrument-off sentinels included). Known coordinate
+columns (`NAV_LATITUDE`/`NAV_LONGITUDE`) are converted from NMEA to decimal degrees.
+`src` is a directory, a vector of file paths, or a vector of directories covering
+several download routes (glider computer + GLIMPSE server) — merged and deduplicated
+by timestamp with the highest resolution preserved. `stream` may be a priority-ranked
+vector, e.g. `["pld1.raw", "pld1.sub"]` to let telemetered rows fill raw-file gaps.
+Pass a subset of segments (or use `SeaExplorerIO.read_pld` with a column selection) to
+limit memory on full-resolution streams.
 
 ```julia
 pld = load_seaexplorer_pld("…/delayed/pld1/logs"; stream="legato.raw")
+pld = load_seaexplorer_pld(["…/delayed/pld1/logs", "…/glimpse"];
+                           stream=["pld1.raw", "pld1.sub"])   # all routes, deduped
 ```
 """
-function load_seaexplorer_pld(src; stream::AbstractString="pld1.raw",
+function load_seaexplorer_pld(src;
+                              stream::Union{AbstractString,AbstractVector{<:AbstractString}}="pld1.raw",
                               mintime::Union{DateTime,Nothing}=DateTime(2000))
     _gt_dataframe(SeaExplorerIO.read_stream(src, stream;
         skip_empty=false, epoch_min=mintime))

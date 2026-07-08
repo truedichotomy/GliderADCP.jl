@@ -28,7 +28,7 @@ GliderADCPMakieExt = "Makie"
 
 [compat]
 CSV = "0.10"
-SeaExplorerIO = "0.1"
+SeaExplorerIO = "0.2"
 Aqua = "0.8"
 Makie = "0.20, 0.21, 0.22, 0.23, 0.24"
 CodecZlib = "0.7.8"
