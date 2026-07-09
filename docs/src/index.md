@@ -4,6 +4,8 @@ Pure-Julia processing of glider-mounted Nortek AD2CP data (SeaExplorer, Slocum) 
 absolute ocean velocity profiles — from the raw instrument binary to referenced,
 quality-controlled velocity sections.
 
+![GliderADCP.jl processing pipeline](assets/pipeline.svg)
+
 ## Features
 
 - **Three input routes, one structure**: native `.ad2cp` binary (bit-identical to the

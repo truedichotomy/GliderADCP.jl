@@ -27,7 +27,7 @@ record: [PLAN.md](PLAN.md).
 
 ## The pipeline
 
-![GliderADCP.jl processing pipeline](docs/pipeline.svg)
+![GliderADCP.jl processing pipeline](docs/src/assets/pipeline.svg)
 
 *(Three AD2CP input routes and the SeaExplorer nav/CTD logs feed one common
 per-ping trunk; navigation supplies the absolute references. The inverse and shear
