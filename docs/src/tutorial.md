@@ -416,7 +416,10 @@ What to expect, and the honest caveats:
   averages the quantization down. The r against the delayed product tracks signal
   variance (0.86 in a weak-flow regime, 0.98 in strong flow) at unchanged rms.
 * **w is the one casualty** (r = 0.66–0.84 vs delayed): the 30-s subsampling aliases
-  the small, fast vertical signal. Get realtime w onboard from the `\$PNOR` stream
+  the small, fast vertical signal — the large coherent events survive, the fine
+  banding washes into speckle. The example writes a per-mission diagnostic
+  (`M*_telemetered_w_sections.png`, delayed vs telemetered w side by side) so this
+  is inspected rather than assumed. Get realtime w onboard from the `\$PNOR` stream
   (a backseat driver), or wait for the delayed data.
 * **QC is thinner here**: no amplitude/correlation screens exist on this route, so
   the |v|, ambiguity, surface and error screens carry the load — another reason the

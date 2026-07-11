@@ -158,19 +158,31 @@ for key in selected_missions()
     fig = plot_sections(panels; colorrange=(-crUV, crUV))
     save(joinpath(OUT, "$(m.label)_telemetered_sections.png"), fig)
 
-    fig2 = Figure(size=(1500, 460))
+    # w diagnostic: the 30-s subsampling aliases the small, fast vertical signal —
+    # the section comparison shows exactly what survives and what washes out
+    sec_wd = grid_profiles(w_d; fields=(:w, :w))
+    sec_wt = grid_profiles(w_t; fields=(:w, :w))
+    crW = ceil(sym99(sec_wd.U, sec_wt.U) * 200) / 200
+    sw = stats["w"]
+    figw = plot_sections([(sec_wd, :U, "w — delayed (full-resolution binary)"),
+                          (sec_wt, :U, @sprintf("w — realtime-telemetered (r=%.2f, rms=%.1f mm/s vs delayed)", sw.r, 1000sw.rms))];
+        colorrange=(-crW, crW))
+    save(joinpath(OUT, "$(m.label)_telemetered_w_sections.png"), figw)
+
+    fig2 = Figure(size=(2000, 460))
     su, sv = stats["u"], stats["v"]
-    for (i, s, lab) in ((1, su, "u"), (2, sv, "v"))
+    for (i, s, lab) in ((1, su, "u"), (2, sv, "v"), (3, sw, "w"))
         ax = Axis(fig2[1, i]; xlabel="delayed $(lab) (m/s)", ylabel="real-time $(lab) (m/s)",
-            title=@sprintf("telemetered inverse %s: r=%.3f, rms=%.1f mm/s", lab, s.r, 1000s.rms),
+            title=@sprintf("telemetered %s: r=%.3f, rms=%.1f mm/s", lab, s.r, 1000s.rms),
             aspect=1)
         scatter!(ax, s.j[s.m, s.col], s.j[s.m, Symbol(s.col, :_1)];
             markersize=2, color=(:steelblue, 0.25))
         ablines!(ax, 0, 1; color=:black, linestyle=:dash)
     end
-    ax3 = Axis(fig2[1, 3]; xlabel="rms difference vs delayed (mm/s)", ylabel="depth (m)",
+    ax3 = Axis(fig2[1, 4]; xlabel="rms difference vs delayed (mm/s)", ylabel="depth (m)",
         yreversed=true, title="by depth")
-    for (s, color, lab) in ((stats["u"], :dodgerblue, "tele u"), (stats["v"], :navy, "tele v"))
+    for (s, color, lab) in ((stats["u"], :dodgerblue, "tele u"), (stats["v"], :navy, "tele v"),
+                            (stats["w"], :seagreen, "tele w"))
         zc, rmsz = Float64[], Float64[]
         for z1 in 0:50:950
             mz = s.m .&& (z1 .<= s.j.z .< z1 + 50)
@@ -195,5 +207,5 @@ for key in selected_missions()
     end
     axislegend(ax3; position=:rb)
     save(joinpath(OUT, "$(m.label)_telemetered_vs_delayed.png"), fig2; px_per_unit=2)
-    @info "  wrote $(m.label)_telemetered_sections.png, $(m.label)_telemetered_vs_delayed.png"
+    @info "  wrote $(m.label)_telemetered_{sections,w_sections,vs_delayed}.png"
 end
