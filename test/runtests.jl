@@ -945,10 +945,14 @@ end
             @test all(isnan, a.amp) && all(isnan, a.corr)
             @test a.config.coordsystem === :beam
             @test a.range ≈ [2.7, 4.7]
-            # QC runs with the missing screens as no-ops; first cell masked
+            # QC runs with the missing screens as no-ops; large-blanking default
+            # keeps cell 1, and first_cells=1 still masks it on request
+            b = deepcopy(a)
             qc!(a)
-            @test all(isnan, a.vel[1, :, :])
+            @test isfinite(a.vel[1, 1, 1])
             @test isfinite(a.vel[2, 1, 2])
+            qc!(b; thr=QCThresholds(first_cells=1))
+            @test all(isnan, b.vel[1, :, :])
             # soundspeed vector length mismatch is an error
             @test_throws ErrorException load_pld_adcp([del, gl]; stream="pld1.sub",
                 cellsize=2.0, blanking=0.7, soundspeed=[1500.0])

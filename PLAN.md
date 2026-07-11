@@ -389,6 +389,15 @@ All six §8a tasks closed, then:
    the open pipeline is ~3× closer to the delayed truth. Example
    `examples/realtime_telemetered.jl`; 354 tests incl. gated M38 acceptance.
 
+6. **First-cell verdict (2026-07-11).** The deliberate 0.7 m blanking makes cell 1
+   clean on all four missions (full correlation, on-curve amplitude, no bias vs cell 2,
+   ~1.5× per-sample noise); keeping it adds 12% of samples (1/6 of telemetered data)
+   and improves the shear-vs-inverse health metric on every mission with closure and
+   drift unchanged. `QCThresholds.first_cells` default flipped 1 → 0, with a `qc!`
+   warning below 0.5 m blanking. Four-mission health range now r = 0.90–0.98 at
+   30–63 mm/s; telemetered-vs-delayed improves to 33/31 mm/s (w r 0.67 → 0.71).
+   Evidence + new-configuration check recipe in the QA/QC guide §2b.
+
 ## 9. Risks & open questions
 
 - **Attitude/sign conventions** are the classic failure mode: resolved by triple-checking

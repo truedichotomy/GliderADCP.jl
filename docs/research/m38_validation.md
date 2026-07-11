@@ -496,3 +496,34 @@ Caveats for the record: the telemetered w product is the one real casualty of
 the 30-s subsampling (use the $PNOR route or delayed data for w); and the
 `AD2CP_TIME` clock is the instrument's, which also sidesteps the payload-clock
 bench rows (early M38 payload stamps read 2019 while `AD2CP_TIME` is correct).
+
+## First-cell verdict (2026-07-11): the 0.7 m blanking did its job — keep cell 1
+
+The fleet's AD2CP configuration uses 0.7 m blanking (vs the ~0.1 m Nortek default)
+by design, to push cell 1 clear of transducer ringing. Verified on all four
+missions (all 0.7 m/2.0 m):
+
+- **Instrument level**: cell-1 correlation 96–97% (identical to cells 2–3);
+  amplitude sits on the geometric-spreading + absorption decay curve (the 6–7 dB
+  drop to cell 2 matches 20·log₁₀(4.7/2.7) + absorption ≈ 5.8 dB) — no ringing
+  spike above the curve.
+- **Sample level**: adjacent-cell velocity differences show no anomalous (1,2)
+  bias (0.1–2.5 mm/s, same fore/aft antisymmetric pattern as the (2,3) and (3,4)
+  pairs, i.e. the ordinary range-dependent bias); per-sample noise is ~1.5× cell 2
+  (near-field transition) — unbiased-but-noisier, which averages down.
+- **Product level (M38 A/B, first_cells 1 → 0)**: +12.5% samples;
+  shear-vs-inverse health metric improves r 0.977 → 0.983, rms 37 → 32 mm/s;
+  DAC closure and surface-drift agreement unchanged (the earlier "keeping the
+  first cell slightly degrades drift agreement" result was the bundled
+  surface-mask loosening, not cell 1). Telemetered route (cell 1 = 1/6 of the
+  data): bin occupancy +29%, agreement with delayed truth improves on every
+  product (u 36 → 33, v 35 → 31 mm/s rms; w r 0.67 → 0.71).
+
+**Default changed**: `QCThresholds.first_cells` is now 0 (keep cell 1), with a
+`qc!` warning when the configured blanking is < 0.5 m (small-blanking deployments
+should set `first_cells = 1`). Re-measured four-mission health metrics with
+cell 1 included: shear-vs-inverse r = 0.90–0.98 at 30–63 mm/s rms (improved on
+every mission), DAC closure 1–2 mm/s, dive/climb ≈ 2 cm/s — and the measured
+shear-bias slopes shift slightly with the near cell included
+(−4.7/−4.3/−3.1/−0.5 ×10⁻⁴ s⁻¹ for 2022/2022/2023/2024), still
+mission-dependent, still calibrated per mission.

@@ -145,14 +145,14 @@ acceptance tests that run on real missions when the data is present.
    velocity field from synthetic pings to the bin-discretization floor (permanent tests).
 4. **Four-mission cross-validation** — the full pipeline run on M37/M48 (Jan Mayen
    2022/2023), M38 (Lofoten), M59 (subtropical NW Atlantic): DAC closure 1–2 mm/s,
-   dive-vs-climb med |Δ| ≈ 2 cm/s, shear-vs-inverse agreement r = 0.88–0.98 at
-   3.4–7 cm/s rms.
+   dive-vs-climb med |Δ| ≈ 2 cm/s, shear-vs-inverse agreement r = 0.90–0.98 at
+   3–6 cm/s rms.
 5. **Real-time vs delayed, both routes** — the `$PNOR` stream (onboard bound): inverse
    = delayed to 3.2–5.1 mm/s rms, zero bias, four missions, amplitude-independent; the
    shear method pays 2–3 cm/s to quantization. The **telemetered `pld1.sub` route**
    (what shore actually receives, 1 ensemble/~30 s × 6 cells): still solves the
-   identical yos and matches the delayed inverse at r ≈ 0.98, ~3.5 cm/s rms — the
-   method-uncertainty floor, and ~3× closer to the delayed truth than ALSEAMAR's
+   identical yos and matches the delayed inverse at r ≈ 0.98, ~3.2 cm/s rms — the
+   method-uncertainty floor, and ~3.5× closer to the delayed truth than ALSEAMAR's
    proprietary product from the same input.
 6. **Data-QC discovery** — on M38, 99.7% of bottom-track locks proved false (near-field
    water-borne targets); feeding them to the inverse injected a spurious 300-m shear
@@ -226,8 +226,8 @@ examples/missions.jl              shared mission registry
 - **Effective range is shorter than configured range.** In clear water the correlation
   collapses well before the last cell (~15–17 m of a configured 30 m); `cell_quality`
   shows where, and `corr ≥ 80` is recommended for conservative shear-method work.
-- **The range-dependent shear bias is mission/configuration-dependent** (−4×10⁻⁴ s⁻¹ in
-  2022, −2.4×10⁻⁴ in 2023, −3×10⁻⁵ in 2024 on the same instrument) — always calibrate per mission.
+- **The range-dependent shear bias is mission/configuration-dependent** (−4.3–4.7×10⁻⁴ s⁻¹ in
+  2022, −3.1×10⁻⁴ in 2023, −5×10⁻⁵ in 2024 on the same instrument) — always calibrate per mission.
 - **Deferred with rationale** (see PLAN.md): full Merckelbach flight model (the ADCP
   supersedes it for w and through-water speed), burst-mode EVR (no local burst data),
   compass *correction* (diagnostic in place; correction is a research task).

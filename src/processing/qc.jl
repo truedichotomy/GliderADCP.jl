@@ -4,12 +4,19 @@
 
 """
     QCThresholds(; correlation=50, amplitude_max=75, snr_db=3, velocity_max=0.8,
-                 ambiguity_frac=0.9, surface_depth=5, first_cells=1,
+                 ambiguity_frac=0.9, surface_depth=5, first_cells=0,
                  drop_error_pings=true)
 
 Thresholds for [`qc!`](@ref). Defaults follow Gradone et al. (2023), gliderad2cp and
 Todd et al. (2017); set a numeric field to `NaN` (or `first_cells = 0`) to disable that
 screen. See the tutorial for tuning guidance.
+
+`first_cells = 0` (keep the first cell) is validated for large-blanking
+configurations: with ≥ 0.5 m blanking, cell 1 shows full correlation, on-curve
+amplitude and unbiased velocities on four reference missions (~1.5× per-sample noise;
+see the QA/QC guide) — dropping it discards good data. Deployments with small
+blanking (Nortek default ~0.1 m) should set `first_cells = 1`: [`qc!`](@ref) warns
+when the configured blanking is below 0.5 m and the first cell is being kept.
 """
 Base.@kwdef struct QCThresholds
     correlation::Float64 = 50.0      # min %, Gradone 2023 (80 = gliderad2cp strict)
@@ -18,7 +25,7 @@ Base.@kwdef struct QCThresholds
     velocity_max::Float64 = 0.8      # max |along-beam| m/s (gliderad2cp)
     ambiguity_frac::Float64 = 0.9    # flag |v| > frac × configured velocity range; NaN disables
     surface_depth::Float64 = 5.0     # mask pings shallower than this (m); NaN disables
-    first_cells::Int = 1             # cells nearest the transducer to drop
+    first_cells::Int = 0             # cells nearest the transducer to drop (see docstring)
     drop_error_pings::Bool = true    # instrument Error ≠ 0 → drop whole ping
 end
 
@@ -59,6 +66,10 @@ function qc!(a::AD2CPData; thr::QCThresholds=QCThresholds(), depth=nothing)
     if thr.first_cells > 0
         m = falses(nc, nb, nt); m[1:min(thr.first_cells, nc), :, :] .= true
         stats[:first_cells] = reject(m)
+    elseif isfinite(a.config.blanking) && a.config.blanking < 0.5
+        @warn "qc!: keeping the first cell with blanking = $(a.config.blanking) m — " *
+              "cell 1 is likely ringing-contaminated at small blanking; consider " *
+              "QCThresholds(first_cells=1) (the 0-default is validated for ≥ 0.5 m)"
     end
     if isfinite(thr.surface_depth)
         m = falses(nc, nb, nt)

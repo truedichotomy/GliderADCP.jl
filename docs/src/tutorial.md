@@ -93,7 +93,7 @@ means, so onboard processing from this stream is quantitatively viable
 (`examples/realtime_vs_delayed.jl`). Note the stream is payload-logged, not
 transmitted: the true **shore-side** real-time data is the AD2CP subset inside the
 telemetered `pld1.sub` (`load_pld_adcp` — one ensemble per ~30 s, 6 cells). Run
-through the same pipeline it matches the delayed inverse at r ≈ 0.98 and ~3.5 cm/s rms
+through the same pipeline it matches the delayed inverse at r ≈ 0.98 and ~3.2 cm/s rms
 — the method-uncertainty floor — and ~3× closer to the delayed truth than ALSEAMAR's
 proprietary GLIMPSE product from the identical input
 (`examples/realtime_telemetered.jl`; see the QA/QC guide §8 for the routes table). Two caveats: pass `look=` explicitly to
@@ -175,12 +175,11 @@ stats = qc!(adcp)          # masks rejected samples to NaN, returns per-screen f
 | \|v_beam\| ≤ 0.8 m/s | wraps/outliers | ambiguity velocity of the standard config is 2.5 m/s |
 | ambiguity fraction 0.9 | near-wrap samples | uses the configured velocity range |
 | glider depth ≤ 5 m | surfaced pings | bubbles, wake, GPS-fix maneuvering |
-| first cell | ringing | transducer recovery |
+| first cell (off by default) | ringing | with ≥ 0.5 m blanking cell 1 is clean (validated on four missions) and kept; set `first_cells = 1` for small-blanking configs — `qc!` warns |
 | instrument error ≠ 0 | flagged pings | hardware self-reports |
 
-The defaults reject ≈50 % of beam samples on M38 and 57–58 % on the other two
-validated missions (M37, M59) — dominated by the SNR floor beyond the useful range and
-the surface mask; the surviving samples are
+The defaults reject 46–53 % of beam samples on the four validated missions —
+dominated by the SNR floor beyond the useful range and the surface mask; the surviving samples are
 the ones the solvers should see. Loosening the surface mask to 2 m and keeping the first
 cell was tested and does **not** change the near-surface answer (it slightly degrades
 the surface-drift agreement) — the defaults are not hiding signal.
@@ -317,7 +316,7 @@ cross-check, reading its per-yo wiggles with the drift envelope in mind.
     the shear method integrates, fuses constraints (DAC, screened bottom track, drift)
     the shear method cannot, and closes the DAC at 1–2 mm/s on every validated
     mission. Keep the shear method as the standard second opinion — the two fail
-    differently, so their agreement (r = 0.88–0.98 across missions) is the single best
+    differently, so their agreement (r = 0.90–0.98 across missions) is the single best
     end-to-end health check; a collapse in that agreement is how the false
     bottom-track contamination was caught. Both stand on the same DAC reference, so
     absolute accuracy remains a navigation question for either. The full argument and
@@ -339,7 +338,7 @@ shear (see the validation report for the full analysis).
 # 2. DAC closure: depth-mean of each profile vs its DAC
 #    (median 1–2 mm/s on all four validated missions; ≫ 1 cm/s ⇒ referencing errors).
 # 3. Shear-vs-inverse agreement on common (yo, z) bins
-#    (r = 0.88–0.98, rms 3–7 cm/s across missions; a collapse here flags contamination
+#    (r = 0.90–0.98, rms 3–6 cm/s across missions; a collapse here flags contamination
 #    anywhere in the chain — this check exposed the false bottom-track defect).
 # 4. Surface drift: mean of the shallowest bins vs surface_drift after each yo
 #    (M38: median |Δ| = 4 cm/s).

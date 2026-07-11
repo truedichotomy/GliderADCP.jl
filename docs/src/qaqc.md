@@ -13,7 +13,7 @@ by inspection of the velocities themselves.
 
 The default screens (correlation ≥ 50 %, amplitude window, SNR floor, ambiguity,
 surface mask, first cell, error flags — see the tutorial for the full table)
-reject **50–58 % of beam samples** on the four validated missions. That number
+reject **46–53 % of beam samples** on the four validated missions. That number
 is normal, dominated by the SNR floor beyond the useful range plus the surface
 mask, and it is not hiding signal: loosening the surface mask and keeping the
 first cell was tested on M38 and does not change the near-surface answer.
@@ -33,6 +33,23 @@ M38. For conservative shear-method work use `corr ≥ 80`.
 
 **Check:** run [`cell_quality`](@ref) once per mission; if the correlation
 profile collapses early, do not expect the outer cells to contribute.
+
+## 2b. The first cell: keep it when blanking ≥ 0.5 m
+
+The fleet flies 0.7 m blanking precisely so cell 1 clears transducer ringing —
+and it does, on all four missions: full correlation (96–97 %), amplitude on the
+physical decay curve (no ringing spike), no velocity bias against cell 2
+(≤ 2.5 mm/s, the ordinary range-dependent pattern), just ~1.5× per-sample noise.
+Keeping it adds 12 % of samples (and 1/6 of all telemetered data), improves the
+shear-vs-inverse health metric on every mission, and leaves DAC closure and
+surface-drift agreement unchanged — so `first_cells = 0` (keep) is now the
+default. **Small-blanking deployments (Nortek default ~0.1 m) must set
+`first_cells = 1`**; `qc!` warns when blanking < 0.5 m and cell 1 is kept.
+
+**Check:** on a new configuration, compare the mean and std of
+`vel[1,:,:] − vel[2,:,:]` against `vel[2,:,:] − vel[3,:,:]` on deep pings — a
+clean cell 1 shows the same pair statistics; ringing shows up as an anomalous
+offset and inflated variance in the first pair.
 
 ## 3. Bottom track: assume false until proven genuine (`bt_valid`)
 
@@ -67,8 +84,9 @@ perfectly (they are water-referenced on both sides).
 
 All missions carry a range-dependent along-track bias in the beam samples, but
 its magnitude is **configuration/mission-dependent, not an instrument
-constant**: −4.3×10⁻⁴ s⁻¹ on both 2022 missions, −2.4×10⁻⁴ in 2023, and
-−3.1×10⁻⁵ (an order of magnitude smaller) on the same instrument in 2024. Left uncorrected it tilts the
+constant**: −4.7/−4.3×10⁻⁴ s⁻¹ on the 2022 missions, −3.1×10⁻⁴ in 2023, and
+−5×10⁻⁵ (nearly an order of magnitude smaller) on the same instrument in 2024
+(measured with cell 1 included). Left uncorrected it tilts the
 shear-method profiles end to end; the inverse partially averages it away.
 `calibrate_shear_bias!` measures it with a pairwise-difference estimator
 (per-offset means under-correct when depth coverage is partial) and removes it
@@ -129,14 +147,14 @@ A SeaExplorer carries **two** real-time AD2CP data routes; do not conflate them:
 | cells | all (15) | first 6 |
 | amp / corr / BT | yes / yes / no | none |
 | quantization | 0.01 m/s | 0.01 m/s |
-| inverse vs delayed | 3.2–5.1 mm/s rms (four missions) | ~35 mm/s rms, zero bias (M38) |
+| inverse vs delayed | 3.2–5.1 mm/s rms (four missions) | ~32 mm/s rms, zero bias (M38) |
 
 Both routes lack the accelerometer — pass `look=` explicitly. The `$PNOR`
 result (an *onboard* product bound) holds on four missions independent of
 signal amplitude; the shear method pays 2–3 cm/s to quantization on it. The
 telemetered route — the true *shore-side* product — still solves the identical
-yo set and lands at the method-uncertainty floor (~3.6 cm/s); its one casualty
-is w (r ≈ 0.67 — the 30-s subsampling aliases the small, fast vertical signal).
+yo set and lands at the method-uncertainty floor (~3.2 cm/s); its one casualty
+is w (r ≈ 0.71 — the 30-s subsampling aliases the small, fast vertical signal).
 For reference, ALSEAMAR's proprietary GLIMPSE product from the same telemetered
 input sits ~3× further from the delayed truth (rms 107–131 mm/s, striping and
 spurious deep values). `AD2CP_TIME` is the instrument clock (MMDDYY) — immune
@@ -150,7 +168,7 @@ M37's stream held 15 ensembles the instrument card did not retain.
 |---|---|---|
 | dive vs climb consistency | r = 0.98, med \|Δ\| = 2 cm/s (M38) | transform/sign/geometry errors |
 | DAC closure (per yo) | median 1–2 mm/s (all four missions) | referencing errors |
-| shear vs inverse agreement | r = 0.88–0.98, rms 3–7 cm/s | contamination anywhere in the chain — this is the check that exposed the false-BT defect |
+| shear vs inverse agreement | r = 0.90–0.98, rms 3–6 cm/s | contamination anywhere in the chain — this is the check that exposed the false-BT defect |
 | surface drift vs shallowest bins | med \|Δ\| = 4 cm/s (M38) | near-surface problems |
 | BT plausibility (if any locks survive) | implied depth vs bathymetry | false locks |
 
