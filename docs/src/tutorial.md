@@ -71,8 +71,14 @@ adcp = load_ad2cp("sea064_M38.ad2cp")
 # 2. MIDAS netCDF export (also multi-file: pass a directory or vector)
 adcp = load_ad2cp("sea064_M38.ad2cp.00000.nc")
 
-# 3. the real-time $PNOR telemetry stream (SeaExplorer payload logs)
+# 3. the $PNOR ASCII stream (payload-logged; recovered with the glider)
 adcp_rt = load_pnor("delayed/pld1/logs")
+
+# 4. the telemetered AD2CP subset inside pld1.sub — what Iridium actually
+#    delivers mid-mission (one subsampled ensemble / ~30 s, cells 1–6, no
+#    amp/corr/BT; cellsize+blanking come from the deployment configuration)
+tele = load_pld_adcp(["delayed/pld1/logs", "glimpse"]; stream="38.pld1.sub",
+                     cellsize=2.0, blanking=0.7)
 ```
 
 The native reader was validated **bit-for-bit** against the MIDAS export of the same
@@ -83,8 +89,14 @@ yields essentially the delayed-mode product: on all four validated missions the
 inverse solution matches the binary-derived one to r ≥ 0.9984 and 3.2–5.1 mm/s rms with
 zero bias, independent of signal amplitude (the agreement holds through a >1 m/s Gulf
 Stream jet on M59) — the 0.01 m/s per-sample quantization averages down in the bin
-means, so real-time or onboard processing from this stream is quantitatively viable.
-See `examples/realtime_vs_delayed.jl`. Two caveats: pass `look=` explicitly to
+means, so onboard processing from this stream is quantitatively viable
+(`examples/realtime_vs_delayed.jl`). Note the stream is payload-logged, not
+transmitted: the true **shore-side** real-time data is the AD2CP subset inside the
+telemetered `pld1.sub` (`load_pld_adcp` — one ensemble per ~30 s, 6 cells). Run
+through the same pipeline it matches the delayed inverse at r ≈ 0.98 and ~3.5 cm/s rms
+— the method-uncertainty floor — and ~3× closer to the delayed truth than ALSEAMAR's
+proprietary GLIMPSE product from the identical input
+(`examples/realtime_telemetered.jl`; see the QA/QC guide §8 for the routes table). Two caveats: pass `look=` explicitly to
 `process_pings` (the stream has no accelerometer), and expect the shear-method product
 to carry ~2.5 cm/s rms extra noise, since vertical integration accumulates the
 quantization error that the inverse localizes. Platform data:

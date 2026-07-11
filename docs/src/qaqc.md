@@ -118,17 +118,31 @@ Real missions are messy, and the stack's contract is *degrade loudly*:
   `LEGATO_SOUND_VELOCITY` etc.) — absent columns degrade to missing **with a
   warning**, never a KeyError.
 
-## 8. Real-time (`$PNOR` stream) data quality
+## 8. Real-time data quality — two routes, only one reaches shore
 
-The telemetry stream quantizes velocities at 0.01 m/s and lacks accelerometer
-and BT records (pass `look=` explicitly). Run through the identical pipeline on
-four missions, the **inverse product is the delayed product to 3.2–5.1 mm/s
-rms with zero bias**, independent of signal amplitude (the agreement holds
-through a >1 m/s Gulf Stream jet on M59). The **shear method pays 2–3 cm/s**,
-growing with depth — integration accumulates the quantization noise the inverse
-localizes. Check stream coverage against the binary with `coverage`: M38's
-payload stopped writing the stream mid-mission (binary-only tail), while M37's
-stream held 15 ensembles the instrument card did not retain.
+A SeaExplorer carries **two** real-time AD2CP data routes; do not conflate them:
+
+| | `$PNOR` stream (`load_pnor`) | telemetered `pld1.sub` subset (`load_pld_adcp`) |
+|---|---|---|
+| reaches shore mid-mission | **no** — payload-logged, recovered with the glider | **yes** — inside the Iridium-transmitted `pld1.sub` |
+| ensembles | every one (~2 s) | one every ~30 s (single subsampled ensemble, not an average) |
+| cells | all (15) | first 6 |
+| amp / corr / BT | yes / yes / no | none |
+| quantization | 0.01 m/s | 0.01 m/s |
+| inverse vs delayed | 3.2–5.1 mm/s rms (four missions) | ~35 mm/s rms, zero bias (M38) |
+
+Both routes lack the accelerometer — pass `look=` explicitly. The `$PNOR`
+result (an *onboard* product bound) holds on four missions independent of
+signal amplitude; the shear method pays 2–3 cm/s to quantization on it. The
+telemetered route — the true *shore-side* product — still solves the identical
+yo set and lands at the method-uncertainty floor (~3.6 cm/s); its one casualty
+is w (r ≈ 0.67 — the 30-s subsampling aliases the small, fast vertical signal).
+For reference, ALSEAMAR's proprietary GLIMPSE product from the same telemetered
+input sits ~3× further from the delayed truth (rms 107–131 mm/s, striping and
+spurious deep values). `AD2CP_TIME` is the instrument clock (MMDDYY) — immune
+to the payload-clock bench rows. Check stream coverage against the binary with
+`coverage`: M38's payload stopped writing the `$PNOR` stream mid-mission, while
+M37's stream held 15 ensembles the instrument card did not retain.
 
 ## 9. Pipeline health metrics — compute these on every mission
 

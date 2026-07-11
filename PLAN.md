@@ -378,6 +378,17 @@ All six §8a tasks closed, then:
    health metrics with validated values. Stale pre-Task-3 BT numbers in tutorial §8
    fixed (retracted r_v = 0.97 claim removed, closure updated to 1–2 mm/s).
 
+5. **Shore-side real-time route (2026-07-11).** Distinguished the two real-time AD2CP
+   routes: the `$PNOR` stream is payload-logged only (not transmitted); the Iridium
+   route is the AD2CP subset inside `pld1.sub` (verified: one subsampled ensemble per
+   ~30 s, MMDDYY instrument stamps, beam coords, cells 1–6, 0.01 m/s, no amp/corr/BT).
+   New `load_pld_adcp` (multi-route, deduped) feeds the standard pipeline: M38
+   shore-side inverse matches delayed at r = 0.977/0.978, rms 36/35 mm/s, zero bias,
+   identical 127 yos (w is the casualty: r = 0.67 — subsampling aliases it). ALSEAMAR's
+   proprietary GLIMPSE product from identical input: r = 0.80/0.82, rms 131/107 mm/s —
+   the open pipeline is ~3× closer to the delayed truth. Example
+   `examples/realtime_telemetered.jl`; 354 tests incl. gated M38 acceptance.
+
 ## 9. Risks & open questions
 
 - **Attitude/sign conventions** are the classic failure mode: resolved by triple-checking

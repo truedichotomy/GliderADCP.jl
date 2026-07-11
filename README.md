@@ -29,21 +29,24 @@ record: [PLAN.md](PLAN.md).
 
 ![GliderADCP.jl processing pipeline](docs/src/assets/pipeline.svg)
 
-*(Three AD2CP input routes and the SeaExplorer nav/CTD logs feed one common
+*(Four AD2CP input routes and the SeaExplorer nav/CTD logs feed one common
 per-ping trunk; navigation supplies the absolute references. The inverse and shear
 methods produce U/V from identical inputs — their agreement is the health check —
 and `solve_w` adds vertical velocity, all written out as gridded sections.)*
 
 Independent layers, each with a small, testable surface. Every function below is exported.
 
-**I/O — three AD2CP routes into one structure, plus navigation**
+**I/O — four AD2CP routes into one structure, plus navigation**
 - **`read_ad2cp(path)`** — native `.ad2cp` binary reader (10-byte headers, checksums,
   DF3/DF20 records, embedded config string); bit-identical to the Nortek MIDAS export
   with no Windows/MIDAS step.
 - **`load_ad2cp(path)`** — MIDAS netCDF (single file, directory, or vector), including
   the `AverageBT` bottom-track group.
-- **`load_pnor(dir)`** — the real-time `$PNOR` ASCII telemetry stream embedded in the
-  glider payload logs (0.01 m/s quantized) — for onboard/near-real-time products.
+- **`load_pnor(dir)`** — the `$PNOR` ASCII stream in the payload logs (every ensemble,
+  0.01 m/s quantized; payload-logged, recovered with the glider) — bounds onboard products.
+- **`load_pld_adcp(dirs)`** — the **telemetered** AD2CP pings inside `pld1.sub` (one
+  subsampled ensemble per ~30 s, 6 cells, beam coordinates) — the data shore actually
+  has mid-mission, for true real-time products.
 - **`load_seaexplorer_nav` / `load_seaexplorer_pld`** — SeaExplorer nav (`gli`) and
   payload (`pld1`, `legato`, …) readers via SeaExplorerIO.jl: gzipped, per-segment,
   mission-scale, with glider-computer + GLIMPSE-server multi-route merge and dedup.
@@ -129,7 +132,7 @@ nav = load_seaexplorer_nav(["delayed/nav/logs", "glimpse"]; stream = "38.gli.sub
 
 ## Validation
 
-Five independent lines, all in the test suite (328 tests) or scripted, with gated
+Five independent lines, all in the test suite (354 tests) or scripted, with gated
 acceptance tests that run on real missions when the data is present.
 
 1. **Reference-implementation parity** — the beam→XYZ transform reproduces `gliderad2cp`
@@ -144,11 +147,13 @@ acceptance tests that run on real missions when the data is present.
    2022/2023), M38 (Lofoten), M59 (subtropical NW Atlantic): DAC closure 1–2 mm/s,
    dive-vs-climb med |Δ| ≈ 2 cm/s, shear-vs-inverse agreement r = 0.88–0.98 at
    3.4–7 cm/s rms.
-5. **Real-time vs delayed** — the same pipeline on the `$PNOR` telemetry stream vs the
-   full-resolution binary: the inverse product is the delayed product to 3.2–5.1 mm/s
-   rms with zero bias, on all four missions, independent of signal amplitude (unchanged
-   through an M59 Gulf Stream jet > 1 m/s). The shear method pays 2–3 cm/s to stream
-   quantization.
+5. **Real-time vs delayed, both routes** — the `$PNOR` stream (onboard bound): inverse
+   = delayed to 3.2–5.1 mm/s rms, zero bias, four missions, amplitude-independent; the
+   shear method pays 2–3 cm/s to quantization. The **telemetered `pld1.sub` route**
+   (what shore actually receives, 1 ensemble/~30 s × 6 cells): still solves the
+   identical yos and matches the delayed inverse at r ≈ 0.98, ~3.5 cm/s rms — the
+   method-uncertainty floor, and ~3× closer to the delayed truth than ALSEAMAR's
+   proprietary product from the same input.
 6. **Data-QC discovery** — on M38, 99.7% of bottom-track locks proved false (near-field
    water-borne targets); feeding them to the inverse injected a spurious 300-m shear
    layer. `bt_valid` now screens them by default (min range + impossible-bathymetry

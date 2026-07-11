@@ -908,6 +908,54 @@ end
         @test count(bt_valid(bt2; max_range=10.0)) == 0
     end
 
+    @testset "telemetered pld1.sub AD2CP subset (load_pld_adcp)" begin
+        hdr = "PLD_REALTIMECLOCK;NAV_LONGITUDE;AD2CP_TIME;AD2CP_HEADING;AD2CP_PITCH;" *
+              "AD2CP_ROLL;AD2CP_PRESSURE;AD2CP_V1_CN1;AD2CP_V2_CN1;AD2CP_V3_CN1;AD2CP_V4_CN1;" *
+              "AD2CP_V1_CN2;AD2CP_V2_CN2;AD2CP_V3_CN2;AD2CP_V4_CN2\n"
+        # AD2CP_TIME is MMDDYY; heading 9999 marks instrument-off rows
+        rows_seg = "03/11/2022 12:00:31.100;126.5;110322 12:00:00;90.0;-17.5;1.0;55.5;" *
+                   "0.11;-0.02;0.30;0.04;0.12;-0.03;0.31;0.05\n" *
+                   "03/11/2022 12:01:01.100;126.5;110322 12:00:30;9999.0;9999.0;9999.0;9999.0;" *
+                   "9999.0;9999.0;9999.0;9999.0;9999.0;9999.0;9999.0;9999.0\n"
+        # GLIMPSE export: YO_NUMBER column first; duplicates the first segment ping
+        # (different values — segment-file source listed first must win) + adds one
+        rows_gl = "YO_NUMBER;" * hdr *
+                  "5;03/11/2022 12:00:31.100;126.5;110322 12:00:00;90.0;-17.5;1.0;55.5;" *
+                  "0.99;0.99;0.99;0.99;0.99;0.99;0.99;0.99\n" *
+                  "5;03/11/2022 12:01:31.200;126.5;110322 12:01:00;91.0;-17.4;0.9;56.5;" *
+                  "-0.21;0.07;0.15;0.02;-0.22;0.08;0.16;0.03\n"
+        mktempdir() do del
+        mktempdir() do gl
+            open(joinpath(del, "sea064.38.pld1.sub.1.gz"), "w") do io
+                gz = GzipCompressorStream(io)
+                write(gz, hdr * rows_seg)
+                close(gz)
+            end
+            write(joinpath(gl, "SEA064.38.pld1.sub.all.csv"), rows_gl)
+            a = load_pld_adcp([del, gl]; stream="pld1.sub", cellsize=2.0, blanking=0.7,
+                serial=42)
+            @test length(a) == 2                       # off-row skipped, duplicate deduped
+            @test ncells(a) == 2
+            @test a.time[1] == DateTime(2022, 11, 3, 12, 0, 0)   # MMDDYY parsed
+            @test a.time[2] == DateTime(2022, 11, 3, 12, 1, 0)
+            @test a.vel[1, 1, 1] ≈ 0.11f0              # segment source won the duplicate
+            @test a.vel[2, 3, 2] ≈ 0.16f0
+            @test a.heading[2] ≈ 91.0f0
+            @test a.pressure[1] ≈ 55.5
+            @test all(isnan, a.amp) && all(isnan, a.corr)
+            @test a.config.coordsystem === :beam
+            @test a.range ≈ [2.7, 4.7]
+            # QC runs with the missing screens as no-ops; first cell masked
+            qc!(a)
+            @test all(isnan, a.vel[1, :, :])
+            @test isfinite(a.vel[2, 1, 2])
+            # soundspeed vector length mismatch is an error
+            @test_throws ErrorException load_pld_adcp([del, gl]; stream="pld1.sub",
+                cellsize=2.0, blanking=0.7, soundspeed=[1500.0])
+        end
+        end
+    end
+
     @testset "robustness: corrupt and missing inputs" begin
         # --- SeaExplorer: missing + corrupt segments ---
         mktempdir() do d
@@ -1034,6 +1082,48 @@ end
                 @test cor(j[m, c], j[m, Symbol(c, :_1)]) > 0.995
                 @test sqrt(mean(d .^ 2)) < 0.010          # quantization-level rms
                 @test abs(mean(d)) < 0.002                # no systematic offset
+            end
+        end
+    end
+
+    if isfile(M38_NC) && isdir(M38_PLD) && isdir(M38_NAV) && isdir(joinpath(M38_DIR, "glimpse"))
+        @testset "M38 acceptance: telemetered pld1.sub route" begin
+            # multi-route load (glider-computer segments + GLIMPSE export, deduped)
+            tele = load_pld_adcp([M38_PLD, joinpath(M38_DIR, "glimpse")];
+                stream="38.pld1.sub", cellsize=2.0, blanking=0.7, serial=102381)
+            @test length(tele) > 40_000
+            @test ncells(tele) == 6
+            @test issorted(tele.t)
+            # each telemetered ping is a single subsampled ensemble: match one
+            # against the netCDF at the same instrument timestamp, quantized 0.01
+            a = load_ad2cp(M38_NC)
+            k = findfirst(t -> abs(t - tele.t[100]) < 0.5, a.t)
+            @test k !== nothing
+            vq = round.(Float64.(a.vel[1:6, :, k]) .* 100) ./ 100
+            m = isfinite.(tele.vel[:, :, 100])
+            @test maximum(abs, Float64.(tele.vel[:, :, 100])[m] .- vq[m]) < 0.011
+            # 3-day mini-pipeline: telemetered inverse tracks the delayed inverse
+            tcut = tele.t[1] + 3 * 86400
+            tele3 = tele[tele.t .< tcut]
+            a3 = a[a.t .< tcut]
+            nav = load_seaexplorer_nav(M38_NAV)
+            dac = compute_dac(nav)
+            qc!(tele3); qc!(a3)
+            p_t = process_pings(tele3; lat=69.5, look=:down,
+                declination=magnetic_declination(nav, tele3.t))
+            p_d = process_pings(a3; lat=69.5,
+                declination=magnetic_declination(nav, a3.t))
+            calibrate_shear_bias!(p_t); calibrate_shear_bias!(p_d)
+            inv_t = solve_inverse(p_t, dac)
+            inv_d = solve_inverse(p_d, dac)
+            j = innerjoin(inv_d, inv_t; on=[:yo, :z], makeunique=true)
+            gm = (j.nobs .> 10) .&& (j.nobs_1 .> 3) .&& isfinite.(j.u) .&& isfinite.(j.u_1)
+            @test length(unique(j.yo[gm])) >= 10
+            for c in (:u, :v)
+                d = j[gm, c] .- j[gm, Symbol(c, :_1)]
+                @test cor(j[gm, c], j[gm, Symbol(c, :_1)]) > 0.9
+                @test sqrt(mean(d .^ 2)) < 0.06
+                @test abs(mean(d)) < 0.01
             end
         end
     end

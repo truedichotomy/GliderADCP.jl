@@ -441,3 +441,58 @@ at ~200 m over the crests).
   rms 3.2/3.3 mm/s, zero bias, identical 255 yos (stream covers 98.9%);
   shear method ~2 cm/s; w rms 0.5 mm/s. Cross-mission inverse range is now
   3.2–5.1 mm/s over four missions.
+
+## The second real-time route (2026-07-11): telemetered pld1.sub AD2CP pings
+
+Two "real-time" AD2CP data routes exist on a SeaExplorer, and only one of them
+reaches shore mid-mission:
+
+1. **`$PNOR` ASCII stream** (`ad2cp.raw` logs): every ensemble, all 15 cells,
+   amplitudes + correlations — but *payload-logged only*, recovered with the
+   glider. The earlier "real-time vs delayed" work (Task 5 and the cross-mission
+   confirmations) characterized this route; it bounds an *onboard* product.
+2. **AD2CP subset inside `pld1.sub`** — what Iridium actually transmits: one
+   subsampled ensemble every ~30 s (`AD2CP_TIME`, MMDDYY HH:MM:SS instrument
+   stamp; matched rows are the instrument ensemble quantized to 0.01 m/s —
+   verified against the binary at max |Δv| = 0.005, while a 30-s-average
+   hypothesis fails at 0.15–0.94), beam coordinates, cells 1–6 of 15, attitude
+   to 0.1°, pressure — no amplitude, correlation, or bottom track. ALSEAMAR's
+   proprietary GLIMPSE processing of these rows appears as `AD2CP_*_c` columns
+   in server exports.
+
+`load_pld_adcp` now ingests route 2 (glider-computer segment logs + GLIMPSE
+`.all.csv`/per-cycle exports, deduplicated on the instrument timestamp) into the
+standard `AD2CPData`; the config (cell size, blanking) comes from the deployment
+plan, the onboard sound speed is reconstructed from the configured salinity +
+payload CTD temperature so the standard correction applies, the missing QC
+fields degrade to no-op screens, and `first_cells` removes the ringing cell —
+leaving 5 usable cells (2.7–12.7 m below the transducer, inside the ~15–17 m
+effective range, so the discarded far cells are ones QC would have rejected).
+
+**M38 shore-side product vs delayed** (`examples/realtime_telemetered.jl`):
+41,354 telemetered pings (vs 124k ensembles) still solve the identical 127 yos;
+even the shear-bias calibration works from 5 cells (−3.4×10⁻⁴ vs −3.9×10⁻⁴
+full-range). Inverse agreement with the delayed product:
+
+    u: r = 0.977, rms = 36 mm/s, bias −0.1 mm/s
+    v: r = 0.978, rms = 35 mm/s, bias  0.0 mm/s
+    w: r = 0.67,  rms = 8.5 mm/s        (subsampling aliases the small, fast w signal)
+
+That is: **the true shore-side product lands at the method-uncertainty floor**
+(~3.6 cm/s, the shear-vs-inverse spread) — an order of magnitude above the
+$PNOR route's 4–5 mm/s (which has 30× the pings and all cells), but fully
+usable scientifically, with zero bias and every section feature reproduced.
+
+**ALSEAMAR's own GLIMPSE product**, binned to the same (yo, z) grid and compared
+to the delayed inverse: r = 0.80/0.82, rms = 131/107 mm/s, with visible striping
+artifacts and spurious deep values in the duty-cycled period. Per-ping (its
+native form) it correlates with the delayed inverse at the glider's depth at
+r ≈ 0.76–0.79 (QF = 0). The open pipeline on the identical telemetered input is
+~3× closer to the delayed truth than the proprietary product. `Utot_c`/`Udir_c`
+do not decode as magnitude/direction of `Ueast_c`/`Unorth_c` (units/semantics
+unresolved); `QF_c ∈ {0, 3, 4}`.
+
+Caveats for the record: the telemetered w product is the one real casualty of
+the 30-s subsampling (use the $PNOR route or delayed data for w); and the
+`AD2CP_TIME` clock is the instrument's, which also sidesteps the payload-clock
+bench rows (early M38 payload stamps read 2019 while `AD2CP_TIME` is correct).

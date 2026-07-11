@@ -52,7 +52,7 @@ export InverseOptions, invert_segment, solve_inverse
 export ShearOptions, shear_segment, integrate_shear, solve_shear, solve_shear_profile
 export inverse_shear
 export magnetic_declination, grid_profiles, export_sections
-export load_pnor, slocum_nav, dac_from_slocum, time_in_bin, plot_sections
+export load_pnor, load_pld_adcp, slocum_nav, dac_from_slocum, time_in_bin, plot_sections
 export read_ad2cp
 export shear_bias, apply_shear_bias!, calibrate_shear_bias!
 export vertical_velocity, glider_w, solve_w, compass_field_check
@@ -76,6 +76,7 @@ include("types.jl")
 include("io/nortek_netcdf.jl")   # MIDAS-exported .nc  (primary input)
 include("io/nortek_pnor.jl")     # real-time \$PNORI/\$PNORS/\$PNORC ASCII stream
 include("io/seaexplorer.jl")     # .gli / .pld1 navigation & payload files
+include("io/pld_adcp.jl")        # telemetered AD2CP pings inside pld1.sub
 include("io/slocum.jl")          # Slocum glider data (JLDBDReader.jl / ERDDAP exports)
 include("io/ad2cp_binary.jl")    # native .ad2cp binary reader (later phase)
 
