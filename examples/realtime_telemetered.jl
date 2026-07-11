@@ -119,6 +119,15 @@ for key in (isempty(ARGS) ? ["m38"] : lowercase.(ARGS))
         for ((y, z), vals) in rows
             push!(inv_a, (y, tmid[y], z, mean(first.(vals)), mean(last.(vals)), length(vals)))
         end
+        # keep the section time axis identical to the delayed/telemetered panels:
+        # same yo set (ALSEAMAR also has values on short segments our solvers skip —
+        # drop those columns), and pad any yo it lacks so the grids align 1:1
+        yoset = Set(unique(inv_d.yo))
+        inv_a = inv_a[[y in yoset for y in inv_a.yo], :]
+        present = Set(unique(inv_a.yo))
+        for y in setdiff(yoset, present)
+            push!(inv_a, (y, tmid[y], zlev[1], NaN, NaN, 0))
+        end
         @info "  ALSEAMAR product, binned to (yo, z) and compared to the delayed inverse:"
         for col in (:u, :v)
             s = agreement(inv_d, inv_a, col)
