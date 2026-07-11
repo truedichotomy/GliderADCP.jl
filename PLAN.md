@@ -387,7 +387,10 @@ All six §8a tasks closed, then:
    identical 127 yos (w is the casualty: r = 0.67 — subsampling aliases it). ALSEAMAR's
    proprietary GLIMPSE product from identical input: r = 0.80/0.82, rms 131/107 mm/s —
    the open pipeline is ~3× closer to the delayed truth. Example
-   `examples/realtime_telemetered.jl`; 354 tests incl. gated M38 acceptance.
+   `examples/realtime_telemetered.jl` (now runs all missions by default); 355 tests
+   incl. gated M38 acceptance. Cross-mission (2026-07-11): our telemetered product
+   28–45 mm/s rms, |bias| ≤ 0.8 mm/s on all four missions; ALSEAMAR 101–127 mm/s,
+   r = 0.39–0.90, biases to 38 mm/s.
 
 6. **First-cell verdict (2026-07-11).** The deliberate 0.7 m blanking makes cell 1
    clean on all four missions (full correlation, on-curve amplitude, no bias vs cell 2,

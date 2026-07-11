@@ -527,3 +527,21 @@ every mission), DAC closure 1–2 mm/s, dive/climb ≈ 2 cm/s — and the measur
 shear-bias slopes shift slightly with the near cell included
 (−4.7/−4.3/−3.1/−0.5 ×10⁻⁴ s⁻¹ for 2022/2022/2023/2024), still
 mission-dependent, still calibrated per mission.
+
+**Cross-mission confirmation (2026-07-11, all four missions).** The telemetered
+shore-side product and the ALSEAMAR comparison, run identically everywhere
+(`examples/realtime_telemetered.jl`, cell 1 included):
+
+    mission  tele pings  yos            our tele inverse (vs delayed)     ALSEAMAR (vs delayed)
+    M37        26,773    104 of 107     r=0.93/0.94  rms 29/28 mm/s       r=0.65/0.64  rms 111/101 mm/s
+    M38        41,354    127 of 127     r=0.98/0.98  rms 33/31 mm/s       r=0.81/0.82  rms 129/107 mm/s
+    M48        41,049    255 of 255     r=0.86/0.90  rms 35/33 mm/s       r=0.39/0.45  rms 119/127 mm/s (v bias +33 mm/s)
+    M59        68,106    154 of 154     r=0.98/0.97  rms 42/45 mm/s       r=0.90/0.82  rms 114/119 mm/s (u bias +38 mm/s)
+
+The open telemetered product sits at 28–45 mm/s rms with |bias| ≤ 0.8 mm/s on
+every mission — at or below the shear-vs-inverse method spread — with r tracking
+signal variance (lowest in M48's weak-flow regime at unchanged rms). ALSEAMAR's
+product is 101–127 mm/s rms everywhere, with mission-dependent biases up to
+38 mm/s. w from the telemetered route: r = 0.66–0.84, rms 5.5–9.5 mm/s — the
+subsampling caveat holds on all missions. M37's stream supports 104 of the 107
+delayed yos (three short segments fall under `min_pings` at 30-s cadence).

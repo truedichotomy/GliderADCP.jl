@@ -16,7 +16,8 @@
 # from the deployment plan. The onboard sound speed is reconstructed from the
 # configured salinity + payload CTD temperature, so the standard correction runs.
 #
-#   JULIA_LOAD_PATH="@:@ocean:@stdlib" julia +1.13 --project=. examples/realtime_telemetered.jl m38
+#   JULIA_LOAD_PATH="@:@ocean:@stdlib" julia +1.13 --project=. examples/realtime_telemetered.jl        # all missions
+#   JULIA_LOAD_PATH="@:@ocean:@stdlib" julia +1.13 --project=. examples/realtime_telemetered.jl m38     # one mission
 
 using GliderADCP, SeaExplorerIO
 using DataFrames, Dates, Statistics, NaNStatistics
@@ -40,7 +41,7 @@ function agreement(a, b, col; nmin_a=10, nmin_b=3)
     (j=j, m=m, col=col, n=count(m), r=cor(c1[m], c2[m]), rms=sqrt(mean(d .^ 2)), bias=mean(d))
 end
 
-for key in (isempty(ARGS) ? ["m38"] : lowercase.(ARGS))
+for key in selected_missions()
     m = MISSIONS[key]
     @info "════════ $(m.label): shore-side real-time (telemetered pld1.sub) ════════"
     srcs = [joinpath(m.dir, "delayed/pld1/logs"), joinpath(m.dir, "glimpse")]

@@ -147,7 +147,7 @@ A SeaExplorer carries **two** real-time AD2CP data routes; do not conflate them:
 | cells | all (15) | first 6 |
 | amp / corr / BT | yes / yes / no | none |
 | quantization | 0.01 m/s | 0.01 m/s |
-| inverse vs delayed | 3.2–5.1 mm/s rms (four missions) | ~32 mm/s rms, zero bias (M38) |
+| inverse vs delayed | 3.2–5.1 mm/s rms (four missions) | 28–45 mm/s rms, \|bias\| ≤ 0.8 mm/s (four missions) |
 
 Both routes lack the accelerometer — pass `look=` explicitly. The `$PNOR`
 result (an *onboard* product bound) holds on four missions independent of
@@ -156,8 +156,9 @@ telemetered route — the true *shore-side* product — still solves the identic
 yo set and lands at the method-uncertainty floor (~3.2 cm/s); its one casualty
 is w (r ≈ 0.71 — the 30-s subsampling aliases the small, fast vertical signal).
 For reference, ALSEAMAR's proprietary GLIMPSE product from the same telemetered
-input sits ~3× further from the delayed truth (rms 107–131 mm/s, striping and
-spurious deep values). `AD2CP_TIME` is the instrument clock (MMDDYY) — immune
+input sits ~3–4× further from the delayed truth on every mission (rms
+101–127 mm/s, r = 0.39–0.90, mission-dependent biases up to 38 mm/s, striping
+and spurious deep values). `AD2CP_TIME` is the instrument clock (MMDDYY) — immune
 to the payload-clock bench rows. Check stream coverage against the binary with
 `coverage`: M38's payload stopped writing the `$PNOR` stream mid-mission, while
 M37's stream held 15 ensembles the instrument card did not retain.

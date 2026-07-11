@@ -150,10 +150,10 @@ acceptance tests that run on real missions when the data is present.
 5. **Real-time vs delayed, both routes** — the `$PNOR` stream (onboard bound): inverse
    = delayed to 3.2–5.1 mm/s rms, zero bias, four missions, amplitude-independent; the
    shear method pays 2–3 cm/s to quantization. The **telemetered `pld1.sub` route**
-   (what shore actually receives, 1 ensemble/~30 s × 6 cells): still solves the
-   identical yos and matches the delayed inverse at r ≈ 0.98, ~3.2 cm/s rms — the
-   method-uncertainty floor, and ~3.5× closer to the delayed truth than ALSEAMAR's
-   proprietary product from the same input.
+   (what shore actually receives, 1 ensemble/~30 s × 6 cells): matches the delayed
+   inverse at 28–45 mm/s rms with |bias| ≤ 0.8 mm/s on all four missions — the
+   method-uncertainty floor, and ~3–4× closer to the delayed truth than ALSEAMAR's
+   proprietary product from the same input (101–127 mm/s, biases up to 38 mm/s).
 6. **Data-QC discovery** — on M38, 99.7% of bottom-track locks proved false (near-field
    water-borne targets); feeding them to the inverse injected a spurious 300-m shear
    layer. `bt_valid` now screens them by default (min range + impossible-bathymetry
