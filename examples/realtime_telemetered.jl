@@ -71,11 +71,7 @@ for key in selected_missions()
     # ── telemetered route → product ──
     tele = load_pld_adcp(srcs; stream="$(m.prefix).pld1.sub",
         cellsize=bincfg.cellsize, blanking=bincfg.blanking, serial=bincfg.serial)
-    Tping = [interp1(t, ctd_t, Tl) for t in tele.t]
-    c_used = soundspeed_from_ctd.(bincfg.salinity_setting, Tping, tele.pressure, 5.0, lat)
-    tele = load_pld_adcp(srcs; stream="$(m.prefix).pld1.sub",
-        cellsize=bincfg.cellsize, blanking=bincfg.blanking, serial=bincfg.serial,
-        soundspeed=c_used)
+    onboard_soundspeed!(tele, ctd_t, Tl; salinity=bincfg.salinity_setting, lat=lat)
     apply_soundspeed!(tele, soundspeed_correction(tele, ctd_t, c_true))
     qc!(tele)
     p_t = process_pings(tele; lat=lat, look=:down, declination=magnetic_declination(nav, tele.t))

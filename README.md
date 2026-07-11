@@ -55,7 +55,8 @@ Independent layers, each with a small, testable surface. Every function below is
 
 **Per-ping corrections — the common trunk**
 - **`soundspeed_correction` / `apply_soundspeed!`** — rescale velocities to the CTD
-  sound speed (TEOS-10 via `soundspeed_from_ctd`).
+  sound speed (TEOS-10 via `soundspeed_from_ctd`); **`onboard_soundspeed!`**
+  reconstructs the untransmitted onboard value for the realtime-telemetered route.
 - **`qc!(adcp)`** — composable beam-sample screening (correlation, amplitude window,
   SNR floor, ambiguity, surface mask, first-cell, error flags); returns per-screen
   rejection fractions. **`cell_quality`** profiles per-cell/beam correlation to show

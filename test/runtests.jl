@@ -956,6 +956,17 @@ end
             # soundspeed vector length mismatch is an error
             @test_throws ErrorException load_pld_adcp([del, gl]; stream="pld1.sub",
                 cellsize=2.0, blanking=0.7, soundspeed=[1500.0])
+            # onboard sound speed reconstructed from configured salinity + CTD T,
+            # then the standard correction chain applies
+            c = load_pld_adcp([del, gl]; stream="pld1.sub", cellsize=2.0, blanking=0.7)
+            ctd_t = c.t .+ [-60.0, 60.0]
+            cs = onboard_soundspeed!(c, ctd_t, [4.0, 4.2]; salinity=38.0, lat=69.5)
+            @test cs === c.soundspeed
+            @test all(v -> 1440 < v < 1520, c.soundspeed)
+            c_true = soundspeed_from_ctd.(35.0, [4.0, 4.2], [55.0, 56.0], 0.0, 69.5)
+            scale = soundspeed_correction(c, ctd_t, c_true)
+            @test all(isfinite, scale)
+            @test all(s -> 0.99 < s < 1.0, scale)     # S 38→35 shrinks c ⇒ scale < 1
         end
         end
     end

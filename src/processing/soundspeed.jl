@@ -41,6 +41,33 @@ function soundspeed_from_ctd(SP, t, p, lon, lat)
 end
 
 """
+    onboard_soundspeed!(adcp, ctd_t, ctd_temperature; salinity, lat, lon=0.0) -> Vector
+
+Reconstruct the per-ping sound speed the instrument used **onboard** and write it into
+`adcp.soundspeed` (returned). Needed for the realtime-telemetered route
+([`load_pld_adcp`](@ref)), which does not transmit the onboard value: the AD2CP
+computes it from its own temperature and the **configured** `salinity` (from the
+deployment plan; e.g. 38.0 on the reference mission). The instrument temperature is
+approximated by the payload CTD temperature (`ctd_t` unix seconds,
+`ctd_temperature` °C) interpolated to the pings — a ≲0.1 % residual — with the
+instrument's own transmitted pressure. After this, the standard
+[`soundspeed_correction`](@ref) → [`apply_soundspeed!`](@ref) chain applies unchanged:
+
+```julia
+tele = load_pld_adcp(srcs; stream="38.pld1.sub", cellsize=2.0, blanking=0.7)
+onboard_soundspeed!(tele, ctd_t, ctd_T; salinity=38.0, lat=69.5)
+apply_soundspeed!(tele, soundspeed_correction(tele, ctd_t, ctd_c_true))
+```
+"""
+function onboard_soundspeed!(a::AD2CPData, ctd_t::AbstractVector, ctd_T::AbstractVector;
+                             salinity::Real, lat::Real, lon::Real=0.0)
+    Tping = _interp1(ctd_t, ctd_T, a.t)
+    c = soundspeed_from_ctd(salinity, Tping, a.pressure, lon, lat)
+    a.soundspeed .= Float32.(c)
+    return a.soundspeed
+end
+
+"""
     soundspeed_correction(adcp, ctd_t, ctd_c) -> Vector
 
 Per-ping velocity scale factor `c_true/c_recorded`, with `c_true` linearly interpolated

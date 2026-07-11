@@ -371,9 +371,66 @@ fig = plot_sections([(sec, :U, "U — inverse"), (sec, :V, "V — inverse")])
 
 For continuous (gap-bridged) sections, `examples/m38_divand_sections.jl` maps the
 profiles with DIVAnd and masks the analysis where the data give no support (clever
-poor man's error > 0.4) — no extrapolation below the sampled envelope.
+poor man's error > 0.4) — no extrapolation below the sampled envelope. The same
+products exist mid-mission from the realtime-telemetered route — see the next section.
 
-## 10. Scientific interpretation and caveats
+## 10. The shore-side realtime product (realtime-telemetered)
+
+Everything above used delayed-mode data; the identical pipeline also runs mid-mission
+on what Iridium actually delivers — the AD2CP subset inside the transmitted
+`pld1.sub` (one subsampled instrument ensemble every ~30 s, beam velocities in
+cells 1–6 at 0.01 m/s, attitude and pressure; no amplitude, correlation, or bottom
+track). This is a first-class product of the package: on the four validated missions
+it matches the delayed inverse at **28–45 mm/s rms with |bias| ≤ 0.8 mm/s** — at the
+method-uncertainty floor — solving the (nearly) identical yo set.
+
+The complete shore-side workflow, with the three steps that differ from delayed-mode
+processing called out:
+
+```julia
+# 1. load — deployment-plan values for what isn't transmitted (cell geometry);
+#    both download routes merge and dedup exactly as for nav/CTD
+tele = load_pld_adcp(["delayed/pld1/logs", "glimpse"]; stream="38.pld1.sub",
+                     cellsize=2.0, blanking=0.7, serial=102381)
+
+# 2. sound speed — the onboard value isn't transmitted either: reconstruct it from
+#    the CONFIGURED salinity (deployment plan) + payload CTD temperature, then the
+#    standard correction chain applies unchanged
+onboard_soundspeed!(tele, ctd_t, ctd_T; salinity=38.0, lat=69.5)
+apply_soundspeed!(tele, soundspeed_correction(tele, ctd_t, ctd_c_true))
+
+# 3. the standard pipeline — with look= explicit (no accelerometer on this route)
+qc!(tele)                                        # amp/corr/SNR screens no-op; cell 1 kept
+pings = process_pings(tele; lat=69.5, look=:down,
+                      declination=magnetic_declination(nav, tele.t))
+calibrate_shear_bias!(pings)                     # works from the 6 transmitted cells
+inv_rt = solve_inverse(pings, compute_dac(nav))  # the shore-side realtime product
+w_rt   = solve_w(pings, compute_dac(nav))        # see the caveat below
+```
+
+What to expect, and the honest caveats:
+
+* **U/V are science-usable in real time.** The 30× ping subsampling and 6-cell limit
+  cost surprisingly little because the transmitted cells sit inside the effective
+  range (the discarded far cells are the ones QC rejects anyway) and the inverse
+  averages the quantization down. The r against the delayed product tracks signal
+  variance (0.86 in a weak-flow regime, 0.98 in strong flow) at unchanged rms.
+* **w is the one casualty** (r = 0.66–0.84 vs delayed): the 30-s subsampling aliases
+  the small, fast vertical signal. Get realtime w onboard from the `\$PNOR` stream
+  (a backseat driver), or wait for the delayed data.
+* **QC is thinner here**: no amplitude/correlation screens exist on this route, so
+  the |v|, ambiguity, surface and error screens carry the load — another reason the
+  effective-range geometry works in this route's favor.
+* All the referencing, health metrics (DAC closure, shear-vs-inverse agreement) and
+  products (sections, netCDF export, figures) work identically.
+
+For calibration/context, ALSEAMAR's GLIMPSE server computes its own product from the
+same raw telemetered data server-side (the `AD2CP_*_c` columns in its CSV exports);
+the open pipeline above lands ~3–4× closer to the delayed truth on every mission
+(28–45 vs 101–127 mm/s rms). Full comparison: `examples/realtime_telemetered.jl` and
+the QA/QC guide §8 routes table.
+
+## 11. Scientific interpretation and caveats
 
 * **Everything is a segment mean.** The inverse, the shear profile, the DAC and the
   drift comparison all average over a yo (2–6 h). Currents with shorter timescales —

@@ -44,7 +44,7 @@ export nmea2deg, ncells
 export beam_unit_vectors, xyz_from_beams, select_beams, head2vehicle,
        detect_look_direction, rotmat_xyz2enu, beams_to_enu
 export QCThresholds, qc!, bt_valid, cell_quality
-export soundspeed_from_ctd, soundspeed_correction, apply_soundspeed!
+export soundspeed_from_ctd, soundspeed_correction, apply_soundspeed!, onboard_soundspeed!
 export vertical_cosines, offset_grid, regrid_beams, enu_on_isobars
 export compute_dac, surface_drift, lonlat_to_dxdy
 export ProcessedPings, process_pings, glider_depth, segment_indices, bt_velocity
