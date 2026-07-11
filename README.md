@@ -177,6 +177,31 @@ same DAC reference, so absolute accuracy remains a navigation question for eithe
 argument and its limits: [m38_validation.md](docs/research/m38_validation.md) §Method
 verdict.
 
+## Performance
+
+Indicative single-run timings (Apple M3 Max, 2026-07-11, Julia 1.13 vs Python 3.9 /
+numpy, both effectively single-threaded, untuned; machine-dependent — rerun before
+quoting):
+
+- **Identical input** (gliderad2cp's own SEA055 sample, 10,391 pings), full shear
+  pipeline (load → QC → transform → shear → grid → DAC reference):
+  gliderad2cp **2.6 s**; GliderADCP.jl **0.48 s warm**, 3.7 s cold (first call in a
+  fresh process, JIT included) — ≈ 5× faster warm, parity cold. Adding the inverse
+  (which the Python package does not have) costs +0.17 s.
+- **Mission scale** (M38, 124,752 ensembles): the entire delayed-mode chain — native
+  binary read (0.3 s / 54 MB, no MIDAS step), nav + DAC, QC, transform, bias
+  calibration, and **both** solvers — in **5.7 s** of compute (~20 s wall including
+  Julia startup + package load). Per-ping cost ≈ 46 µs, linear from the sample to
+  mission scale.
+
+Caveats, stated plainly: Julia's ~13 s startup/JIT tax is per *process*, not per ping —
+for one-shot scripts on small datasets Python wins wall-clock; for mission-scale,
+batch, or interactive session work the Julia side wins decisively. gliderad2cp is
+competently vectorized numpy, not a slow baseline — the gap is mostly xarray/pandas
+overhead in its referencing stage. Memory was not measured rigorously. The practical
+difference is less the speed than what runs inside it: the 5.7 s M38 budget includes
+the binary reader and both velocity solutions.
+
 ## Package layout
 
 ```
