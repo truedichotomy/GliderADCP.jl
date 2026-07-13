@@ -4,7 +4,7 @@ Pure-Julia processing of glider-mounted ADCP data into absolute ocean velocity
 profiles: from the raw instrument binary to referenced, quality-controlled U/V/W
 sections. Currently supports the Nortek AD2CP, validated end-to-end on four Alseamar
 SeaExplorer missions. Slocum ingestion (`slocum_nav`/`dac_from_slocum` over tables
-from the pure-Julia [JLDBDReader.jl](https://github.com/truedichotomy/JLDBDReader.jl)
+from the pure-Julia [SlocumIO.jl](https://github.com/oceansensing/SlocumIO.jl)
 or ERDDAP, with solver conventions verified against the `Slocum-AD2CP` package) is
 implemented but has not yet been exercised on a real Slocum dataset — test data
 welcome. The pipeline is
@@ -58,7 +58,7 @@ Independent layers, each with a small, testable surface. Every function below is
   payload (`pld1`, `legato`, …) readers via SeaExplorerIO.jl: gzipped, per-segment,
   mission-scale, with glider-computer + GLIMPSE-server multi-route merge and dedup.
   **`slocum_nav`** ingests Slocum dbd/ERDDAP tables (e.g. read with
-  [JLDBDReader.jl](https://github.com/truedichotomy/JLDBDReader.jl)).
+  [SlocumIO.jl](https://github.com/oceansensing/SlocumIO.jl)).
 
 **Per-ping corrections — the common trunk**
 - **`soundspeed_correction` / `apply_soundspeed!`** — rescale velocities to the CTD

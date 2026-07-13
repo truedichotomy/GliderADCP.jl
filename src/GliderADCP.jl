@@ -78,7 +78,7 @@ include("io/nortek_netcdf.jl")   # MIDAS-exported .nc  (primary input)
 include("io/nortek_pnor.jl")     # real-time \$PNORI/\$PNORS/\$PNORC ASCII stream
 include("io/seaexplorer.jl")     # .gli / .pld1 navigation & payload files
 include("io/pld_adcp.jl")        # telemetered AD2CP pings inside pld1.sub
-include("io/slocum.jl")          # Slocum glider data (JLDBDReader.jl / ERDDAP exports)
+include("io/slocum.jl")          # Slocum glider data (SlocumIO.jl / ERDDAP exports)
 include("io/ad2cp_binary.jl")    # native .ad2cp binary reader (later phase)
 
 # ---- Layer 2: per-ping corrections --------------------------------------------------

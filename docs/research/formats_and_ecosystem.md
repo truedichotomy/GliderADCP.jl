@@ -15,7 +15,7 @@ No registered or unregistered Julia package exists for ADCP or Nortek instrument
 
 | Repo | What it provides |
 |---|---|
-| `truedichotomy/JLDBDReader.jl` | Pure-Julia Slocum .dbd/.ebd/... reader, validated byte-for-byte vs Python dbdreader; zero non-stdlib deps; the Slocum ingestion path |
+| `oceansensing/SlocumIO.jl` | Pure-Julia Slocum .dbd/.ebd/... reader, validated byte-for-byte vs Python dbdreader; zero non-stdlib deps; the Slocum ingestion path |
 | `oceansensing/jlglider` | Script-style Julia toolkit; `seaexplorer/seaexplorerFunc.jl` parses .gli/.pld1 (CSV.jl, delim=';', gz); `ad2cp/process_adcp.py` (2,926 ln, gliderad2cp derivative) is the Python incumbent this package replaces; also `ad2cp/data/sea064_M48.ad2cp.00000.nc` sample |
 | `oceansensing/SeaExplorer_Processing` | `AD2CP_processing/`: beam2enu.py, shear_method.py, notebooks, `shear_processing.jl` (partial Julia port to harvest) |
 | `oceansensing/ATOMIXjulia.jl` | Active proper Julia package (NCDatasets, GibbsSeaWater deps) — package-convention template |

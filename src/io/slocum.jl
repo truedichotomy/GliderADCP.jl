@@ -1,9 +1,9 @@
 # Layer 1 — Slocum glider data ingestion (platform-agnostic tables).
 #
 # Works from any Slocum-derived table (ERDDAP tabledap export, Python dbdreader, or the
-# user's pure-Julia JLDBDReader.jl — https://github.com/truedichotomy/JLDBDReader.jl):
+# user's pure-Julia SlocumIO.jl — https://github.com/oceansensing/SlocumIO.jl):
 #
-#   using JLDBDReader
+#   using SlocumIO
 #   d = MultiDBD(dir="…", eng=true, sci=true)
 #   df = DataFrame(get_sync(d, "m_water_vx", "m_water_vy", "m_gps_mag_var",
 #                              "m_lat", "m_lon", "m_depth", ...))
