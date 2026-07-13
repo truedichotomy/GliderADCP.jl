@@ -1,6 +1,6 @@
 name = "GliderADCP"
 uuid = "f05f80b1-78cb-4309-840d-e0b7e825600a"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Donglai Gong <15986815+truedichotomy@users.noreply.github.com>"]
 
 [deps]
