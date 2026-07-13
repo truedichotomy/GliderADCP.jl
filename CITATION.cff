@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "GliderADCP.jl: pure-Julia processing of glider-mounted Nortek AD2CP data into absolute ocean velocity profiles"
+type: software
+authors:
+  - family-names: Gong
+    given-names: Donglai
+    orcid: "https://orcid.org/0000-0002-1697-1739"
+version: 0.1.0
+date-released: "2026-07-13"
+license: MIT
+repository-code: "https://github.com/truedichotomy/GliderADCP.jl"
+keywords:
+  - oceanography
+  - ocean currents
+  - ADCP
+  - underwater glider
+  - SeaExplorer
+  - Slocum
+  - Nortek AD2CP
+  - Julia
+abstract: >-
+  GliderADCP.jl processes glider-mounted Nortek AD2CP data (Alseamar SeaExplorer,
+  Teledyne Slocum) into absolute ocean velocity profiles, from the raw instrument
+  binary to referenced, quality-controlled U/V/W sections. It implements both
+  published approaches over one common trunk — the lADCP-tradition shear method and
+  the Visbeck least-squares inverse with depth-averaged-current, bottom-track, and
+  smoothness constraints — plus realtime products from the payload-logged $PNOR
+  stream and the Iridium-telemetered pld1.sub AD2CP subset. Validated on four
+  SeaExplorer missions against reference Python implementations (machine-exact
+  transform parity), synthetic truth, and internal closure metrics.

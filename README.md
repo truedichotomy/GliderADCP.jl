@@ -15,7 +15,7 @@ Implements both published approaches, from first principles, over one common tru
   with composable depth-averaged-current, bottom-track, and smoothness constraints.
 
 No Python, MATLAB, or Windows/MIDAS at runtime. SeaExplorer log parsing is shared with
-[ATOMIXjulia.jl](https://github.com/oceansensing/ATOMIXjulia.jl) through
+the companion microstructure package ATOMIXjulia.jl (not yet public) through
 [SeaExplorerIO.jl](https://github.com/oceansensing/SeaExplorerIO.jl).
 
 **New users: start with the [tutorial](docs/src/tutorial.md)** (the science and a worked
@@ -134,7 +134,7 @@ nav = load_seaexplorer_nav(["delayed/nav/logs", "glimpse"]; stream = "38.gli.sub
 
 ## Validation
 
-Six independent lines, all in the test suite (355 tests) or scripted, with gated
+Six independent lines, all in the test suite (359 tests) or scripted, with gated
 acceptance tests that run on real missions when the data is present.
 
 1. **Reference-implementation parity** — the beam→XYZ transform reproduces `gliderad2cp`
@@ -262,3 +262,13 @@ examples/missions.jl              shared mission registry
 - **Deferred with rationale** (see PLAN.md): full Merckelbach flight model (the ADCP
   supersedes it for w and through-water speed), burst-mode EVR (no local burst data),
   compass *correction* (diagnostic in place; correction is a research task).
+
+## Data availability
+
+The example scripts and gated acceptance tests reference sea064 SeaExplorer mission
+data (M37, M38, M48, M59) held locally by the author and not distributed with this
+repository; paths live in `examples/missions.jl`. The test suite detects absent data
+and skips those tests automatically, so `Pkg.test()` passes on a fresh clone —
+synthetic-data tests cover every code path. The gliderad2cp cross-validation ground
+truth regenerates from that package's public sample data (see
+`validation/gliderad2cp_reference/README.md` provenance notes in the repo history).

@@ -18,9 +18,6 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
-      # unregistered dep resolved via [sources] relative path
-      - name: clone SeaExplorerIO.jl
-        run: git clone --depth 1 https://github.com/oceansensing/SeaExplorerIO.jl ../SeaExplorerIO.jl
       - uses: julia-actions/setup-julia@v2
         with:
           version: ${{ matrix.version }}

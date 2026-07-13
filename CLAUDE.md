@@ -2,9 +2,11 @@
 
 GliderADCP.jl: pure-Julia processing of glider-mounted Nortek AD2CP data into absolute
 ocean velocities. Two solvers (Visbeck inverse + shear method) over one common trunk.
-Companion packages: SeaExplorerIO.jl (shared file layer, sibling checkout at
-`../SeaExplorerIO.jl`, wired via `[sources]`) and ATOMIXjulia.jl (microstructure;
-consumes this package's calibration through a package extension).
+Companion packages: SeaExplorerIO.jl (shared file layer; resolved from GitHub via
+`[sources]` url — for local loader development, `Pkg.develop(path="../SeaExplorerIO.jl")`
+into the environment you're testing, and push SeaExplorerIO before testing here) and
+ATOMIXjulia.jl (microstructure; consumes this package's calibration through a package
+extension; not yet public).
 
 ## Read before re-investigating anything
 
@@ -72,5 +74,5 @@ placeholder files (read as zero bytes; loaders warn `no rows parsed`).
   when landing a data-facing feature. Loaders must *degrade loudly* (skip corrupt
   files with warnings, report gaps/zero-row sources), never crash or stay silent.
 - `examples/output/` is gitignored; figures regenerate from the example scripts.
-- Julia compat is 1.11+ (the `[sources]` table needs it); CI clones SeaExplorerIO as
-  a sibling before building.
+- Julia compat is 1.11+ (the `[sources]` table needs it); SeaExplorerIO resolves from
+  its public GitHub url, so fresh clones and CI install with no extra steps.
