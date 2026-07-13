@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
-title: "GliderADCP.jl: pure-Julia processing of glider-mounted Nortek AD2CP data into absolute ocean velocity profiles"
+title: "GliderADCP.jl: pure-Julia processing of glider-mounted ADCP data into absolute ocean velocity profiles"
 type: software
 authors:
   - family-names: Gong

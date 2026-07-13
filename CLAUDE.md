@@ -1,7 +1,7 @@
 # CLAUDE.md — working notes for this repository
 
-GliderADCP.jl: pure-Julia processing of glider-mounted Nortek AD2CP data into absolute
-ocean velocities. Two solvers (Visbeck inverse + shear method) over one common trunk.
+GliderADCP.jl: pure-Julia processing of glider-mounted ADCP data (currently the
+Nortek AD2CP) into absolute ocean velocities. Two solvers (Visbeck inverse + shear method) over one common trunk.
 Companion packages: SeaExplorerIO.jl (shared file layer; resolved from GitHub via
 `[sources]` url — for local loader development, `Pkg.develop(path="../SeaExplorerIO.jl")`
 into the environment you're testing, and push SeaExplorerIO before testing here) and
