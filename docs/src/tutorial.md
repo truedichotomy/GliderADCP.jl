@@ -4,7 +4,7 @@ This tutorial walks through the full processing chain on a real mission — sea0
 (SeaExplorer, Nortek Glider AD2CP 1 MHz, Lofoten Basin, Nov 2022) — explaining the
 science behind each step, the choices you can make, and how to judge the results.
 The complete runnable version is
-[`examples/currents.jl`](https://github.com/truedichotomy/GliderADCP.jl/blob/main/examples/currents.jl).
+[`examples/currents.jl`](https://github.com/oceansensing/GliderADCP.jl/blob/main/examples/currents.jl).
 
 ## 1. The measurement problem
 
@@ -472,4 +472,4 @@ et al. (2010, 2019) *JTECH* · Shcherbina, D'Asaro & Nylund (2018) *JTECH* 35, 4
 von Appen (2015) *JTECH* 32 · Stevens-Haas et al. (2022) arXiv:2110.10199 · Nortek
 N3015-007 Integrators Guide & N3015-011 Principles of Operation · Teledyne RDI, ADCP
 Principles of Operation. Full annotated bibliography:
-[`docs/research/literature.md`](https://github.com/truedichotomy/GliderADCP.jl/blob/main/docs/research/literature.md).
+[`docs/research/literature.md`](https://github.com/oceansensing/GliderADCP.jl/blob/main/docs/research/literature.md).
