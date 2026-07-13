@@ -20,9 +20,11 @@ keywords:
   - Nortek AD2CP
   - Julia
 abstract: >-
-  GliderADCP.jl processes glider-mounted Nortek AD2CP data (Alseamar SeaExplorer,
-  Teledyne Slocum) into absolute ocean velocity profiles, from the raw instrument
-  binary to referenced, quality-controlled U/V/W sections. It implements both
+  GliderADCP.jl processes glider-mounted ADCP data into absolute ocean velocity
+  profiles, from the raw instrument binary to referenced, quality-controlled U/V/W
+  sections. It currently supports the Nortek AD2CP, validated end-to-end on Alseamar
+  SeaExplorer missions; Slocum data ingestion is implemented but not yet validated
+  on a real Slocum dataset. It implements both
   published approaches over one common trunk — the lADCP-tradition shear method and
   the Visbeck least-squares inverse with depth-averaged-current, bottom-track, and
   smoothness constraints — plus realtime products from the payload-logged $PNOR

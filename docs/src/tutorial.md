@@ -123,7 +123,10 @@ resolution preserved, and GLIMPSE-only derived columns come along.
 For Slocum gliders, build the equivalents from any dbd-derived table (ERDDAP, Python
 `dbdreader`, or the pure-Julia
 [JLDBDReader.jl](https://github.com/truedichotomy/JLDBDReader.jl)) with
-[`slocum_nav`](@ref) and [`dac_from_slocum`](@ref).
+[`slocum_nav`](@ref) and [`dac_from_slocum`](@ref) — implemented and unit-tested, but
+not yet exercised on a real Slocum mission (the solver conventions are verified
+against the `Slocum-AD2CP` package); treat that configuration as untested and check
+the §8 health metrics with extra care.
 
 ### Missing data, gaps and coverage
 

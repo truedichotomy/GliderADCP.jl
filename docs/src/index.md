@@ -2,7 +2,9 @@
 
 Pure-Julia processing of glider-mounted ADCP data into absolute ocean velocity
 profiles — from the raw instrument binary to referenced, quality-controlled velocity
-sections. Currently supports the Nortek AD2CP on SeaExplorer and Slocum gliders.
+sections. Currently supports the Nortek AD2CP, validated end-to-end on four Alseamar
+SeaExplorer missions; Slocum ingestion is implemented but not yet exercised on a real
+Slocum dataset.
 
 ![GliderADCP.jl processing pipeline](assets/pipeline.svg)
 
@@ -13,7 +15,8 @@ sections. Currently supports the Nortek AD2CP on SeaExplorer and Slocum gliders.
   step needed), MIDAS netCDF, the `$PNOR` stream (**realtime-onboard**, payload-logged),
   and the telemetered `pld1.sub` AD2CP subset (**realtime-telemetered** — what shore has
   mid-mission; shore-side realtime products build on it). SeaExplorer nav/payload
-  parsers (multi-route glider-computer + GLIMPSE merge) and Slocum table ingestion.
+  parsers (multi-route glider-computer + GLIMPSE merge) and Slocum table ingestion
+  (implemented, awaiting real-data validation).
 - **A validated common trunk**: sound-speed correction (TEOS-10), composable QC (the
   first cell is kept by default — validated clean for ≥ 0.5 m blanking configurations),
   IGRF declination, exact 3-beam beam→XYZ→ENU transform, isobaric regridding, and a

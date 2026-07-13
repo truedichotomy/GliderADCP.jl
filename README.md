@@ -2,9 +2,11 @@
 
 Pure-Julia processing of glider-mounted ADCP data into absolute ocean velocity
 profiles: from the raw instrument binary to referenced, quality-controlled U/V/W
-sections. Currently supports the Nortek AD2CP on Alseamar SeaExplorer and Teledyne
-Slocum gliders; the pipeline is organized so other glider ADCP systems can slot in
-at the I/O layer.
+sections. Currently supports the Nortek AD2CP, validated end-to-end on four Alseamar
+SeaExplorer missions. Slocum ingestion (`slocum_nav`/`dac_from_slocum`, and solver
+conventions verified against the `Slocum-AD2CP` package) is implemented but has not
+yet been exercised on a real Slocum dataset — test data welcome. The pipeline is
+organized so other glider ADCP systems can slot in at the I/O layer.
 
 Implements both published approaches, from first principles, over one common trunk:
 

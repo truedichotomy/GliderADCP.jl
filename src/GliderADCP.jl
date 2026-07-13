@@ -1,8 +1,9 @@
 """
     GliderADCP
 
-Pure-Julia processing of glider-mounted Nortek AD2CP data (SeaExplorer and Slocum)
-into absolute ocean velocity profiles.
+Pure-Julia processing of glider-mounted Nortek AD2CP data into absolute ocean
+velocity profiles — validated end-to-end on Alseamar SeaExplorer missions; Slocum
+ingestion is implemented but not yet exercised on a real Slocum dataset.
 
 Implements, from first principles, the two published approaches:
 
