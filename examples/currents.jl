@@ -78,8 +78,9 @@ function process(m)
     bslopes = calibrate_shear_bias!(pings)
     @info "    shear-bias slope $(round(bslopes[1], sigdigits=3)) s⁻¹ → residual $(round(bslopes[end], sigdigits=2))"
 
-    @info "5/7 DAC + bottom track (screened) + velocity solutions"
-    dac = compute_dac(nav)
+    @info "5/7 DAC (water-track ladder) + bottom track (screened) + velocity solutions"
+    # ADCP water track → flight model (duty-cycle gaps) → onboard DR (last resort)
+    dac = compute_dac(nav, pings; fallback=flight_model(nav))
     btv = bt_velocity(adcp; max_range=28.0, declination=magnetic_declination(nav, adcp.bt.t))
     @info "    $(nrow(dac)) DAC segments, $(nrow(btv)) bottom-track fixes survive screening"
     inv = solve_inverse(pings, dac; bt=(nrow(btv) > 0 ? btv : nothing))

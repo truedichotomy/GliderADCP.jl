@@ -22,7 +22,10 @@ underdetermination of glider ADCP work. Something extra must close the system:
 * **Depth-averaged current (DAC)** — the glider dead-reckons underwater; the position
   jump at the first GPS fix after surfacing, divided by the submerged time, is the
   time-averaged current over the yo (accuracy 1–2 cm/s RMS; Rudnick et al. 2018,
-  Gradone et al. 2023).
+  Gradone et al. 2023). That textbook accuracy assumes the dead-reckoning is
+  unbiased — it is not (the onboard flight model runs 5–15 % fast on every mission
+  we checked), which is why the production DAC here dead-reckons from the ADCP's
+  own through-water measurement instead (§7).
 * **Bottom track** — when the seafloor is within range, the instrument measures the
   glider's velocity over ground directly: an absolute reference with no GPS involved.
 * **Surface GPS drift** — consecutive fixes while surfaced give the near-surface
@@ -275,7 +278,8 @@ Details that matter (and are tested):
 ## 7. References and the two solvers
 
 ```julia
-dac = compute_dac(nav)                        # fix-to-fix DAC per yo (m/s, true E/N)
+dac = compute_dac(nav, pings;                 # water-track DAC per yo (m/s, true E/N)
+                  fallback=flight_model(nav)) # flight model fills instrument-off yos
 btv = bt_velocity(adcp; max_range=28.0,
                   declination=magnetic_declination(nav, adcp.bt.t))
 drift = surface_drift(nav)                    # near-surface constraint / validation
@@ -284,6 +288,40 @@ inv = solve_inverse(pings, dac; bt=btv)       # the reference product
 shr = solve_shear(pings, dac)                 # the corrected second opinion
 w   = vertical_velocity(pings)                # w = U_rel + dP/dt, flight-model-free
 ```
+
+!!! warning "The onboard dead-reckoning flight model is not to be trusted"
+    The nav-only `compute_dac(nav)` inherits ALSEAMAR's onboard flight model: while
+    submerged the vehicle advances its position with a modeled through-water speed,
+    and the surfacing fix "corrects" the difference into the DAC. Measured against
+    the ADCP's own through-water flow (a direct measurement,
+    [`throughwater_velocity`](@ref)), that onboard model runs **5–15 % fast on all
+    four validated missions**, which biases the nav-only DAC 2–4 cm/s *against the
+    direction of travel* — several times the textbook 1–2 cm/s DAC accuracy, and it
+    flips sign with track direction (zigzag artifacts between opposing transects).
+    `compute_dac(nav, pings)` replaces the onboard displacement with
+    ``\int u_{tw}\,dt`` over the same fix-to-fix window (water-track referencing,
+    cf. Todd et al. 2017), removing the onboard model from the product entirely;
+    yos without ADCP coverage (duty cycling) descend the ladder — first to the
+    package's own steady [`flight_model`](@ref) (`fallback = flight_model(nav)`;
+    within ~1.4 cm/s of the ADCP water track with no systematic bias on the
+    validated missions), and only failing that to the onboard estimate — with the
+    `method` column recording the rung per yo. Verified against GPS surface drift
+    on the three missions where drift can arbitrate; the remaining residual is the
+    mean shear across the 4–16 m cell offset, ≲ 1 cm/s. Full evidence: validation
+    doc, QA/QC guide §3b.
+
+No ADCP aboard, or not running? The same flight-model physics still beats the
+onboard dead-reckoning by ~3× (and removes its systematic anti-track bias):
+
+```julia
+dac = compute_dac(nav, flight_model(nav))     # flight-model water-track DAC
+```
+
+[`flight_model`](@ref) needs only nav pitch and depth. Its polar defaults to the
+pooled SEA064 calibration; on any mission that does carry an ADCP,
+[`measure_aoa`](@ref) + [`fit_flightparams`](@ref) recalibrate it per glider —
+GliderADCP carries the full flight-model kit natively (a deliberate twin of
+GliderTurbulence.jl's, so each package stands alone).
 
 !!! warning "False bottom-track locks"
     Glider BT records can be dominated by **false locks on near-field/water-borne
@@ -407,8 +445,11 @@ qc!(tele)                                        # amp/corr/SNR screens no-op; c
 pings = process_pings(tele; lat=69.5, look=:down,
                       declination=magnetic_declination(nav, tele.t))
 calibrate_shear_bias!(pings)                     # works from the 6 transmitted cells
-inv_rt = solve_inverse(pings, compute_dac(nav))  # the shore-side realtime product
-w_rt   = solve_w(pings, compute_dac(nav))        # see the caveat below
+dac_rt = compute_dac(nav, pings; max_gap=90.0,   # water-track DAC works ashore too:
+                     fallback=flight_model(nav)) # cells 3–6 sit in the 4–16 m window;
+                                                 # max_gap spans the ~30 s cadence
+inv_rt = solve_inverse(pings, dac_rt)            # the shore-side realtime product
+w_rt   = solve_w(pings, dac_rt)                  # see the caveat below
 ```
 
 What to expect, and the honest caveats:
@@ -433,7 +474,7 @@ What to expect, and the honest caveats:
 For calibration/context, ALSEAMAR's GLIMPSE server computes its own product from the
 same raw telemetered data server-side (the `AD2CP_*_c` columns in its CSV exports);
 the open pipeline above lands ~3–4× closer to the delayed truth on every mission
-(28–45 vs 101–127 mm/s rms). Full comparison: `examples/realtime_telemetered.jl` and
+(28–45 vs 100–129 mm/s rms). Full comparison: `examples/realtime_telemetered.jl` and
 the QA/QC guide §8 routes table.
 
 ## 11. Scientific interpretation and caveats
@@ -446,8 +487,11 @@ the QA/QC guide §8 routes table.
   quiet upper ocean is real *as a segment mean* — but storm-forced bursts (drift p90 =
   0.24 m/s) are under-represented by construction. Time-resolved estimation is a
   research extension (cf. Stevens-Haas et al. 2022).
-* **Error budget** (per-yo, after this pipeline): DAC reference 1–2 cm/s (the floor for
-  any absolute statement); declination ≲1 cm/s with IGRF; sound speed ≲1 mm/s after
+* **Error budget** (per-yo, after this pipeline): DAC reference 1–2 cm/s — the floor
+  for any absolute statement, and honest only because the water-track form removed
+  the onboard dead-reckoning term (2–4 cm/s, anti-track, systematic); what remains
+  there is GPS accuracy plus the ≲1 cm/s cell-offset shear residual. Then:
+  declination ≲1 cm/s with IGRF; sound speed ≲1 mm/s after
   correction; compass deviation — check with [`compass_field_check`](@ref) (2° of
   undetected deviation ≈ 1 cm/s); inverse per-bin consistency ≈2 cm/s; shear-method
   integration noise 0.1–0.3 m/s per yo (which is why it is the second opinion).

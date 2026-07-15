@@ -77,6 +77,19 @@ Independent layers, each with a small, testable surface. Every function below is
 
 **References from navigation**
 - **`compute_dac`** — fix-to-fix depth-averaged current per yo (the absolute anchor).
+  The production form `compute_dac(nav, pings)` replaces the onboard dead-reckoning
+  with the time integral of the ADCP-measured through-water velocity
+  (`throughwater_velocity`): ALSEAMAR's onboard flight model runs 5–15 % fast on
+  every validated mission, biasing the nav-only DAC 2–4 cm/s against the direction
+  of travel. Segments without ADCP coverage descend a flagged ladder — the
+  package's own flight model (`fallback = flight_model(nav)`), then the onboard
+  estimate as last resort.
+- **`flight_model`** — steady glide-polar flight solution (AOA + speed through
+  water) from pitch and pressure alone, with per-mission calibration against the
+  ADCP (`measure_aoa` + `fit_flightparams`). Powers the ADCP-less water-track DAC
+  (`compute_dac(nav, flight_model(nav))` — ~3× closer to the ADCP water track
+  than the onboard model, with no systematic bias). A deliberate twin of
+  GliderTurbulence.jl's flight model, so each package stands alone.
 - **`surface_drift`** — near-surface GPS drift, a constraint and a cross-check.
 - **`bt_velocity` / `bt_valid`** — bottom-track over-ground velocity, screened by
   default for false near-field locks (see Validation §6).
@@ -113,7 +126,8 @@ qc!(adcp)
 pings = process_pings(adcp; lat = 69.0,          # ENU relative velocity on isobars
                       declination = magnetic_declination(nav, adcp.t))
 calibrate_shear_bias!(pings)                      # remove the range-dependent bias
-dac = compute_dac(nav)                            # per-yo depth-averaged current
+dac = compute_dac(nav, pings;                     # per-yo DAC, ADCP water-tracked,
+                  fallback = flight_model(nav))   #   flight model filling gaps
 btv = bt_velocity(adcp)                           # screened over-ground velocity
 
 # 4. solve — absolute velocity profiles, two ways, plus vertical
@@ -249,6 +263,8 @@ docs/research/         validation report, method verdict, literature, format ana
 examples/currents.jl              whole-mission workflow (all missions, one script)
 examples/realtime_onboard.jl      realtime-onboard ($PNOR) vs delayed-mode comparison
 examples/realtime_telemetered.jl  shore-side realtime product + ALSEAMAR comparison
+examples/dac_methods.jl           DAC-ladder diagnostic: sections under all three DACs
+                                  + differences vs the ADCP water track, both routes
 examples/m38_divand_sections.jl   DIVAnd-mapped continuous sections
 examples/missions.jl              shared mission registry
 ```
@@ -256,10 +272,13 @@ examples/missions.jl              shared mission registry
 ## Scope notes
 
 - **Absolute velocity is a navigation question.** Both methods reference the same
-  fix-to-fix DAC; a biased dead-reckoning model shifts both products identically. The
-  DAC layer is validated internally (closure 1–2 mm/s, drift consistency) but not yet
-  against an independent instrument (mooring / shipboard ADCP) — that is the one open
-  validation gap.
+  fix-to-fix DAC. The onboard dead-reckoning flight model — measured 5–15 % fast on
+  all four validated missions — is removed from that reference by the water-track
+  form `compute_dac(nav, pings)` (verified against GPS surface drift on the three
+  missions where drift is a competent referee; see Validation). What remains is
+  GPS accuracy plus the ≲1 cm/s cell-offset shear residual — not yet validated
+  against an independent instrument (mooring / shipboard ADCP), which is the one
+  open validation gap.
 - **Everything is a yo-segment mean** (2–6 h). Inertial oscillations vector-average
   toward zero; a weak segment mean does not imply weak instantaneous currents. Time-
   resolved estimation is a research extension.

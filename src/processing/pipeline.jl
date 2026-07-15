@@ -80,3 +80,39 @@ function segment_indices(p::ProcessedPings, t_start::DateTime, t_end::DateTime)
     t1, t2 = datetime2unix(t_start), datetime2unix(t_end)
     findall(t -> t1 <= t <= t2, p.t)
 end
+
+"""
+    throughwater_velocity(p::ProcessedPings; o_min=4.0, o_max=16.0, min_cells=3)
+        -> (u, v, w)
+
+Glider through-water velocity per ping: **minus** the mean relative water velocity
+over the near cells (`o_min`–`o_max` m along-beam offset — close enough that the
+water there moves with the water at the glider, so currents cancel to first order;
+Tanaka et al. 2022). Components are east/north/up (m/s), referenced like the pings
+(true north when `process_pings` was given a declination); `NaN` where fewer than
+`min_cells` cells are finite. This is a direct measurement — no flight model — and
+is what the water-track [`compute_dac`](@ref) method integrates. The residual is
+the mean shear across the cell offset (≲ 1 cm/s for typical stratification over
+the default 4–16 m window).
+"""
+function throughwater_velocity(p::ProcessedPings; o_min::Real=4.0, o_max::Real=16.0,
+                               min_cells::Int=3)
+    sel = findall(o -> o_min <= abs(o) <= o_max, p.offsets)
+    n = length(p)
+    u = fill(NaN, n); v = fill(NaN, n); w = fill(NaN, n)
+    for i in 1:n
+        se = sn = su = 0.0
+        ne = nn = nu = 0
+        for j in sel
+            isfinite(p.E[j, i]) && (se += p.E[j, i]; ne += 1)
+            isfinite(p.N[j, i]) && (sn += p.N[j, i]; nn += 1)
+            isfinite(p.U[j, i]) && (su += p.U[j, i]; nu += 1)
+        end
+        if ne >= min_cells && nn >= min_cells
+            u[i] = -se / ne
+            v[i] = -sn / nn
+        end
+        nu >= min_cells && (w[i] = -su / nu)
+    end
+    return (u=u, v=v, w=w)
+end

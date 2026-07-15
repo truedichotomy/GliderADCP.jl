@@ -80,6 +80,55 @@ bathymetry. A "validation" of BT velocities against water-track velocities is
 **not** evidence they are ground-referenced — false locks pass that test
 perfectly (they are water-referenced on both sides).
 
+## 3b. The onboard dead-reckoning flight model runs 5–15 % fast — water-track the DAC
+
+The other navigation input the products rest on, and the second one that cannot
+be trusted unscreened. The nav-only DAC is `(fix − DR_end)/T`, so it inherits
+ALSEAMAR's onboard flight model wholesale. Measured against the ADCP's directly
+observed through-water flow (near-cell mean relative velocity, no flight model
+involved), the onboard model ran **×1.05–×1.15 fast on all four validated
+missions** (×1.13 typical; it behaves like a steady glide-polar with roughly
+half the real angle of attack). The result: the onboard DR endpoint overshoots
+forward and the nav-only DAC carries a **2–4 cm/s bias against the direction of
+travel** — several times the textbook 1–2 cm/s DAC accuracy, sign-flipping with
+track direction (zigzag artifacts between opposing transects), and it propagates
+1:1 into the inverse's absolute reference. On M48 the onboard DR was noisy
+rather than merely biased (per-yo |Δ| up to 12 cm/s, larger than that mission's
+median DAC).
+
+`compute_dac(nav, pings)` therefore replaces the onboard displacement with the
+integral of [`throughwater_velocity`](@ref) over the same fix-to-fix window and
+is the production default. The full ladder, per yo, flagged in the `method`
+column: **ADCP water track** (direct measurement) → **flight model**
+(`fallback = flight_model(nav)`, or `compute_dac(nav, flight_model(nav))` on
+ADCP-less deployments — the package's own steady polar dead-reckons within
+1.4/1.4/3.1/1.4 cm/s median of the ADCP water track on M37/M38/M48/M59, with
+the systematic along-track bias gone: +0.1/+0.0/+0.5/+0.8 cm/s) → **onboard
+estimate** (last resort). The flight-model rung assumes zero vertical water
+velocity and travel along heading, and its accuracy tracks the polar's
+provenance — the figures above are for the same-glider pooled calibration
+(refit per mission with `fit_flightparams(measure_aoa(pings, nav)...)` when an
+ADCP is aboard).
+Verified against GPS surface drift on M37/M38/M48 (per-yo aggregated, the
+onboard-vs-drift disagreement is along-track — the DAC-error signature — and the
+water-track form removes its predicted share). On M59 surface drift cannot
+arbitrate: a mission-wide ~10 cm/s eastward drift offset (windage/Stokes on the
+surfaced hull, plus Gulf Stream surface shear) dwarfs the 4 cm/s question.
+Residual of the water-track form: mean shear across the 4–16 m cell offset,
+≲ 1 cm/s (window-insensitivity checked at 0.1 cm/s).
+
+**Check:** `compute_dac(nav, pings)` logs its water-track/fallback split; keep
+the median |water-track − onboard| with the mission record (expect ~4 cm/s,
+mostly along-track). A much larger value flags DR, compass, or ADCP problems —
+and a per-mission onboard-speed ratio far from ×1.1 means the vendor changed
+the onboard model (worth knowing either way). The per-mission diagnostic
+figures (`M*_dac_methods_{delayed,telemetered}.png` from
+`examples/dac_methods.jl`) make the ladder visible: U/V sections under all
+three DACs plus differences vs the ADCP water track — DAC effects are
+depth-uniform stripes, pale for the flight model, track-correlated at
+2–5 cm/s for the onboard DR (on M59 a two-week +4–5 cm/s block while the
+glider pointed upstream into the Gulf Stream).
+
 ## 4. Range-dependent shear bias: measure per mission (`calibrate_shear_bias!`)
 
 All missions carry a range-dependent along-track bias in the beam samples, but
@@ -128,6 +177,13 @@ Real missions are messy, and the stack's contract is *degrade loudly*:
   as fake data. Disable only deliberately (`sentinels = nothing`).
 - NMEA DDMM.mmm coordinates are converted to decimal degrees in **all** loaders,
   including payload `NAV_LATITUDE`/`NAV_LONGITUDE` (an early-version gap).
+- **The gli `Heading` column is TRUE heading** — the vehicle applies its
+  configured declination onboard (verified against the AD2CP's magnetic
+  compass: the difference reproduces IGRF declination, −14.8° vs −15.3° on
+  M59, +1.1° vs +1.2° on M38). Never add declination to nav heading — that
+  double-corrects. The AD2CP's own heading **is** magnetic; `process_pings`
+  adds declination there, correctly. The two conventions coexist in one
+  dataset.
 - Epoch-1970 bench rows (clock not yet set) are dropped by default.
 - **Multiple download routes** (glider computer + GLIMPSE server) merge with
   exact-timestamp dedup, highest resolution winning; GLIMPSE-only derived
@@ -169,8 +225,10 @@ summary r — event survival is what matters operationally.
 For reference, ALSEAMAR's GLIMPSE product — computed **server-side** from the same raw
 telemetered data and written back into the server CSV exports as the
 `AD2CP_*_c` columns — sits ~3–4× further from the delayed truth on every mission (rms
-101–127 mm/s, r = 0.39–0.90, mission-dependent biases up to 38 mm/s, striping
-and spurious deep values). `AD2CP_TIME` is the instrument clock (MMDDYY) — immune
+100–129 mm/s, r = 0.56–0.89, mission-dependent biases to ~19 mm/s, striping
+and spurious deep values; biases are quoted against the water-track-referenced
+delayed product — against the old onboard-referenced product they read up to
+38 mm/s, the difference being the onboard-DR error itself). `AD2CP_TIME` is the instrument clock (MMDDYY) — immune
 to the payload-clock bench rows. Check stream coverage against the binary with
 `coverage`: M38's payload stopped writing the `$PNOR` stream mid-mission, while
 M37's stream held 15 ensembles the instrument card did not retain.
@@ -181,6 +239,7 @@ M37's stream held 15 ensembles the instrument card did not retain.
 |---|---|---|
 | dive vs climb consistency | r = 0.98, med \|Δ\| = 2 cm/s (M38) | transform/sign/geometry errors |
 | DAC closure (per yo) | median 1–2 mm/s (all four missions) | referencing errors |
+| water-track vs onboard DAC | med \|Δ\| ≈ 4 cm/s, along-track (all four) | ≫ 4 cm/s flags DR, compass, or ADCP trouble; ≈ 0 means the vendor fixed their flight model |
 | shear vs inverse agreement | r = 0.90–0.98, rms 3–6 cm/s | contamination anywhere in the chain — this is the check that exposed the false-BT defect |
 | surface drift vs shallowest bins | med \|Δ\| = 4 cm/s (M38) | near-surface problems |
 | BT plausibility (if any locks survive) | implied depth vs bathymetry | false locks |

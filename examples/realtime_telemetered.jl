@@ -57,7 +57,6 @@ for key in selected_missions()
     bincfg = read_ad2cp(joinpath(m.dir, m.binary)).config
     nav = load_seaexplorer_nav(joinpath(m.dir, "delayed/nav/logs"); stream="$(m.prefix).gli.sub")
     lat = round(nanmedian(nav.lat), digits=1)
-    dac = compute_dac(nav)
     pld = load_seaexplorer_pld(joinpath(m.dir, "delayed/pld1/logs"); stream="$(m.prefix).pld1.sub")
     ok = findall(i -> !ismissing(pld.LEGATO_SALINITY[i]) && !ismissing(pld.LEGATO_TEMPERATURE[i]) &&
                       !ismissing(pld.LEGATO_PRESSURE[i]), 1:nrow(pld))
@@ -76,6 +75,11 @@ for key in selected_missions()
     qc!(tele)
     p_t = process_pings(tele; lat=lat, look=:down, declination=magnetic_declination(nav, tele.t))
     calibrate_shear_bias!(p_t)
+    # water-track DAC from the telemetered pings themselves — ashore mid-mission even
+    # the DAC is free of the onboard flight model (max_gap spans the ~30 s cadence;
+    # our own flight model fills instrument-off gaps); shared with the delayed
+    # reference below so the comparison isolates the data route
+    dac = compute_dac(nav, p_t; max_gap=90.0, fallback=flight_model(nav))
     inv_t = solve_inverse(p_t, dac)
     w_t = solve_w(p_t, dac)
     @info "  telemetered: $(length(tele)) pings ($(ncells(tele)) cells) → " *

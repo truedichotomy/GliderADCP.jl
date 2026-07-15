@@ -18,7 +18,7 @@ extension; not yet public).
 ## Commands
 
 ```bash
-# tests (359; gated acceptance tests auto-skip when local mission data is absent)
+# tests (413; gated acceptance tests auto-skip when local mission data is absent)
 ~/.juliaup/bin/julia +1.13 --project=. -e 'using Pkg; Pkg.test()'
 
 # docs (Documenter; SeaExplorerIO is dev'd into docs/Manifest)
@@ -30,6 +30,7 @@ JULIA_LOAD_PATH="@:@ocean:@stdlib" ~/.juliaup/bin/julia +1.13 --project=docs doc
 JULIA_LOAD_PATH="@:@ocean:@stdlib" ~/.juliaup/bin/julia +1.13 --project=. examples/currents.jl [m38 ...]
 JULIA_LOAD_PATH="@:@ocean:@stdlib" ~/.juliaup/bin/julia +1.13 --project=. examples/realtime_onboard.jl
 JULIA_LOAD_PATH="@:@ocean:@stdlib" ~/.juliaup/bin/julia +1.13 --project=. examples/realtime_telemetered.jl
+JULIA_LOAD_PATH="@:@ocean:@stdlib" ~/.juliaup/bin/julia +1.13 --project=. examples/dac_methods.jl
 ```
 
 Reference mission data lives under
@@ -56,6 +57,24 @@ placeholder files (read as zero bytes; loaders warn `no rows parsed`).
   near-field water-borne targets. `bt_valid` defaults (min_range = 5 m +
   impossible-bathymetry test) stay on; verify surviving locks' implied water depth
   against bathymetry.
+- **DAC is a water-track ladder** (`compute_dac(nav, pings; fallback=flight_model(nav))`):
+  ALSEAMAR's onboard DR flight model runs ×1.05–×1.15 fast (all four missions),
+  biasing the nav-only DAC 2–4 cm/s anti-track. Rungs, flagged per yo in `method`:
+  `:adcp` (integrated `throughwater_velocity`) → `:flight` (our flight model,
+  ~1.4 cm/s from the water track, unbiased; also the ADCP-less form
+  `compute_dac(nav, flight_model(nav))`) → `:onboard` (last resort).
+  Realtime-telemetered pings need `max_gap=90.0` (~30 s cadence). Drift-verified on
+  M37/M38/M48; M59's drift referee is windage-biased mission-wide — do not "fix" the
+  M59 acid test. Evidence: validation doc 2026-07-15 entries, QA/QC §3b.
+- **The flight model is deliberately twinned** in GliderADCP
+  (`src/processing/flightmodel.jl`) and GliderTurbulence (`src/flightmodel.jl`) so
+  each package stands alone — do not deduplicate; land physics fixes in BOTH files.
+  Loading both packages requires qualifying the shared names (`flight_model`,
+  `FlightParams`, `solve_aoa`, `measure_aoa`, `fit_flightparams`, `FLIGHT_*`);
+  GliderTurbulence's ADCP extension already imports its own explicitly.
+- **gli `Heading` is TRUE heading** (declination applied onboard; verified vs the
+  AD2CP magnetic compass). Never add declination to nav heading; the AD2CP's own
+  heading IS magnetic and `process_pings` adds declination there.
 - **Shear-bias calibration is per-mission** (`calibrate_shear_bias!`): the slope is
   configuration-dependent (−4.7×10⁻⁴ … −5×10⁻⁵ s⁻¹ across 2022–2024), never hard-code.
 - **Telemetered w: events yes, statistics no.** The 30-s subsampling aliases texture

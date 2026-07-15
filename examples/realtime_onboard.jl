@@ -41,7 +41,6 @@ function compare_mission(m)
           "($(round(100cov_r.n / cov_d.n, digits=1))%)"
     nav = load_seaexplorer_nav(joinpath(m.dir, "delayed/nav/logs"); stream="$(m.prefix).gli.sub")
     lat = round(nanmedian(nav.lat), digits=1)
-    dac = compute_dac(nav)
     pld = load_seaexplorer_pld(joinpath(m.dir, "delayed/pld1/logs"); stream="$(m.prefix).pld1.sub")
     ok = findall(i -> !ismissing(pld.LEGATO_SALINITY[i]) && !ismissing(pld.LEGATO_TEMPERATURE[i]) &&
                       !ismissing(pld.LEGATO_PRESSURE[i]), 1:nrow(pld))
@@ -49,12 +48,19 @@ function compare_mission(m)
     c_ctd = soundspeed_from_ctd.(Float64.(pld.LEGATO_SALINITY[ok]),
         Float64.(pld.LEGATO_TEMPERATURE[ok]), Float64.(pld.LEGATO_PRESSURE[ok]), 5.0, lat)
 
-    prods = Dict{String,DataFrame}()
+    procs = Dict{String,ProcessedPings}()
     for (lab, a, look) in (("delayed", adcp_d, :auto), ("realtime", adcp_r, :down))
         apply_soundspeed!(a, soundspeed_correction(a, ctd_t, c_ctd))
         qc!(a)
         p = process_pings(a; lat=lat, look=look, declination=magnetic_declination(nav, a.t))
         calibrate_shear_bias!(p)
+        procs[lab] = p
+    end
+    # one DAC for both routes (water-tracked from the delayed reference pings,
+    # flight model filling any gaps), so the comparison isolates the data route
+    dac = compute_dac(nav, procs["delayed"]; fallback=flight_model(nav))
+    prods = Dict{String,DataFrame}()
+    for (lab, p) in procs
         prods["$(lab)_inv"] = solve_inverse(p, dac)
         prods["$(lab)_shr"] = solve_shear(p, dac)
         prods["$(lab)_w"] = solve_w(p, dac)

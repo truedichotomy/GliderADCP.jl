@@ -48,7 +48,12 @@ export QCThresholds, qc!, bt_valid, cell_quality
 export soundspeed_from_ctd, soundspeed_correction, apply_soundspeed!, onboard_soundspeed!
 export vertical_cosines, offset_grid, regrid_beams, enu_on_isobars
 export compute_dac, surface_drift, lonlat_to_dxdy
-export ProcessedPings, process_pings, glider_depth, segment_indices, bt_velocity
+export ProcessedPings, process_pings, glider_depth, segment_indices, bt_velocity,
+       throughwater_velocity
+export FlightParams, GliderFlight, flight_model, solve_aoa, measure_aoa,
+       fit_flightparams
+export FLIGHT_SEA064, FLIGHT_SEAEXPLORER, FLIGHT_SEAEXPLORER_TANAKA22,
+       FLIGHT_SLOCUM_TANAKA22, FLIGHT_SLOCUM_MEA10
 export InverseOptions, invert_segment, solve_inverse
 export ShearOptions, shear_segment, integrate_shear, solve_shear, solve_shear_profile
 export inverse_shear
@@ -88,9 +93,10 @@ include("processing/geometry.jl")  # beam↔XYZ↔ENU, 3-beam selection, declina
 include("processing/binmap.jl")
 
 # ---- Layer 3: platform kinematics ---------------------------------------------------
-include("processing/dac.jl")       # depth-averaged current from nav (DR/GPS), surface drift
 include("processing/declination.jl")
-include("processing/pipeline.jl")  # ProcessedPings orchestration (Layer 2-3 chain)
+include("processing/pipeline.jl")   # ProcessedPings orchestration (Layer 2-3 chain)
+include("processing/flightmodel.jl") # steady flight model (twin of GliderTurbulence's)
+include("processing/dac.jl")        # DAC ladder (ADCP → flight model → onboard DR), drift
 include("processing/shearbias.jl") # range-dependent bias calibration
 include("processing/compass.jl")   # magnetometer health diagnostics
 include("processing/coverage.jl")  # data-coverage and gap reporting

@@ -42,7 +42,7 @@ qc!(adcp)
 pings = process_pings(adcp; lat=69.5,
                       declination=magnetic_declination(nav, adcp.t))
 calibrate_shear_bias!(pings)
-dac   = compute_dac(nav)
+dac   = compute_dac(nav, pings)                   # DAC, ADCP water-tracked
 btv   = bt_velocity(adcp)
 prof  = solve_inverse(pings, dac; bt=btv)         # yo × depth-bin velocity table
 sec   = grid_profiles(prof)

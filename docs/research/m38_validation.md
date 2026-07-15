@@ -563,3 +563,170 @@ same raw telemetered data, writing `AD2CP_*_c` into its CSV exports — so the
 open-vs-proprietary comparison above is on identical input by construction.
 `examples/realtime_vs_delayed.jl` was renamed `examples/realtime_onboard.jl`
 accordingly.
+
+## The DAC's hidden dependency (2026-07-15): the onboard flight model runs 5–15 % fast — DAC is now ADCP water-tracked
+
+The question (raised by DG): the DAC — the inverse's absolute reference — is
+`(fix − DR_end)/T`, and `DR_end` comes from ALSEAMAR's onboard dead-reckoning
+flight model. Is that model any good? Answered by a three-way comparison of
+horizontal through-water velocity on all four missions:
+
+1. **onboard** — the logged DR track itself, differentiated (the nav file
+   records dead-reckoned positions at ~20 s while `DeadReckoning == 1`);
+2. **our model** — GliderTurbulence.jl's steady flight model with the *fixed*
+   pooled `FLIGHT_SEA064` polar (nav pitch + depth only; the polar pooled
+   M37/M38/M59, making M48 out-of-sample);
+3. **the referee** — the ADCP near-cell (4–16 m) mean relative flow, negated:
+   a direct measurement of through-water velocity requiring no flight model
+   (`throughwater_velocity`). This referee is immune to the recursion concern
+   (our polar's ADCP provenance) and to advection.
+
+**Speed** (median ratios to the referee; 33k–93k steady deep DR steps/mission):
+
+```
+              onboard/ADCP   flight-model/ADCP
+    M37          1.124            1.000
+    M38          1.128            1.001
+    M48          1.048            1.012      ← out-of-sample polar
+    M59          1.147            1.025
+```
+
+The onboard model behaves like a steady polar with roughly **half the real
+angle of attack** (implied α ≈ 3.5° at 18° pitch where ADCP and polar say
+≈ 6°), hence ~12 % too fast horizontally; it is not a fixed-speed law
+(p10–p90 of DR speed 0.23–0.47 m/s tracks flight state). M48's onboard DR is
+additionally *noisy* (ratio IQR 0.72–0.91), not merely biased. **Direction is
+fine** — DR course matches the ADCP course to ≤ 2.3° median everywhere.
+
+**Heading-convention discovery (and a self-caught error).** The DR course
+matches the raw gli `Heading` on every mission *including* M59 where
+declination is −15.3° — because the gli `Heading` column is **true heading**
+(ALSEAMAR applies the configured declination onboard). Verified directly:
+nav heading − AD2CP compass = −14.8° (M59) and +1.1° (M38) vs IGRF −15.3°/+1.2°.
+The first version of this analysis added declination to nav heading (assuming
+magnetic) and produced a spurious −7 cm/s cross-track "error" on M59 — caught
+because the flight-model-free ADCP referee showed ~0 cross-track. Recorded in
+QA/QC §7: never add declination to nav heading; the AD2CP's own compass IS
+magnetic and `process_pings` correctly adds declination there. Nothing in the
+production pipeline consumed nav heading, so no product was affected.
+
+**DAC impact.** Water-track DAC = `(fix_after − fix_before − ∫u_tw dt)/T`
+(Todd-style water-track referencing; implemented as `compute_dac(nav, pings)`
+with per-yo fallback to the onboard estimate below 85 % ADCP coverage):
+
+```
+           median |Δdac|  p90     along-track   median |DAC|
+    M37       4.1 cm/s     5.1      +4.0 cm/s      9.7 cm/s
+    M38       3.9          4.9      +3.8          15.7
+    M48       6.5         12.3      +2.0 (noisy)   4.4    ← Δ exceeds the DAC itself
+    M59       4.0          4.6      +3.9          22.0
+```
+
+Positive along-track = the onboard-referenced DAC was biased *against* the
+direction of travel (the fast-model signature), sign-flipping with track
+direction — zigzag artifacts between opposing transects, 2–6× the textbook
+1–2 cm/s DAC accuracy, propagating 1:1 into the inverse's absolute reference.
+
+**Acid test** — production chain run twice per mission, inverse 0–30 m bins vs
+GPS surface drift, per-yo aggregated, paired. (Metric note: per-yo *vector*
+medians; not comparable to the earlier "med|Δ| = 4 cm/s (M38)" §9 health-table
+figure, which is a different construction.)
+
+```
+            med|Δ| onboard → water-track   yos improved   drift Δ along-track (onboard → water-track)
+    M37        10.2 → 9.2 cm/s                 73 %           +6.9 → +3.3 cm/s
+    M38        16.9 → 16.1                     59 %           +7.6 → +4.0
+    M48        13.6 → 10.1                     76 %           +7.0 → +6.0 (bias vector collapses)
+    M59        22.8 → 23.6                     28 %           −7.4 → −10.7
+```
+
+On M37/M38/M48 the onboard-DAC drift disagreement sits **along-track with
+cross ≈ 0 — precisely the DAC-error signature** — and the water-track form
+removes almost exactly its predicted share (M48's gain is mostly the per-yo
+*random* DR error cleaned up). The residual +3–6 cm/s along-track that remains
+on all missions is physically expected (a surfaced hull in the top metre vs a
+0–30 m bin average: windage + near-surface shear), not DAC error.
+
+**M59: the referee is broken, not the correction.** DG field context: the
+glider was in the Gulf Stream for parts of M59, pushed backwards and sideways
+— confirmed, 29 of 154 yos moved net-backwards over ground. The predicted
+localization however FAILED: splitting by |DAC| shows the same ~28 % improved
+and the same +10 cm/s eastward drift-minus-inverse offset in stream and
+quiescent subsets alike (the stream only adds scatter — rms 55 cm/s at
+|DAC| ≥ 0.5 m/s). So the drift referee is biased mission-wide (windage/Stokes
+on the surfaced hull under summer southwesterlies + wind-driven shear above
+the top bins, ~10 cm/s, geographically fixed eastward), and because the pilot
+pointed the glider upstream for long stretches the through-water tracks
+cluster — a fixed geographic bias then projects as a spurious *negative*
+along-track signal (the wrong sign for a DAC error) and mechanically penalizes
+any along-track correction. A referee with a 10 cm/s systematic error cannot
+adjudicate a 4 cm/s question. M59's correction stands on the direct
+measurements: onboard ×1.147 fast vs ADCP (advection-immune), flight model
+independently agrees with the ADCP to 2.5 %, window-insensitivity 0.12 cm/s
+(4–8 vs 4–16 m — also rules out offset-shear contamination), and the onboard
+firmware shows the identical too-fast signature on all four missions.
+
+**Verdict (standing decision).** `compute_dac(nav, pings)` is the production
+default — the onboard flight model is out of the product loop. Examples,
+tutorial and README updated; the realtime-telemetered product water-tracks its
+DAC ashore too (`max_gap = 90 s` for the ~30 s cadence — cells 3–6 lie inside
+the 4–16 m window at the fleet 2 m/0.7 m configuration). Fallback rows are
+flagged (`method`, `coverage`); M38's duty cycling leaves 64 of 190 yos on the
+onboard estimate. The scope note "a biased dead-reckoning model shifts both
+products identically" is retired — the residual error budget of the reference
+is GPS accuracy plus the ≲ 1 cm/s cell-offset shear term; independent-
+instrument validation (mooring / shipboard ADCP) remains the open gap.
+Acceptance: synthetic truth-recovery tests plus a gated M38 test pinning the
+along-track correction (`test/runtests.jl`, 382 pass).
+
+## Flight-model DAC fallback quantified; the flight model twinned into GliderADCP (2026-07-15, later the same day)
+
+Follow-up question (DG): with no ADCP aboard — or the instrument off — does the
+GliderTurbulence flight model still beat the onboard DR for the DAC? Rerunning
+the forensic with the heading convention fixed (nav heading used as is — the
+first pass double-corrected and inflated the flight model's apparent
+cross-track error) and scoring both dead-reckonings against the ADCP water
+track as truth:
+
+```
+           onboard error (DR−ADCP)          flight-model error (FM−ADCP)
+           med|Δ|   along-track             med|Δ|   along-track
+    M37    4.3      +4.0 cm/s               1.4      +0.1 cm/s
+    M38    4.0      +3.8                    1.4      +0.0
+    M48    6.4      +2.0                    3.1      +0.5
+    M59    4.0      +3.9                    1.4      +0.8
+```
+
+**The flight model is ~3× closer and, decisively, unbiased** — the systematic
+anti-track artifact vanishes; what remains is per-yo scatter (p90 2.3–5.9 cm/s;
+zero-vertical-water-velocity assumption, apogee masking, residual polar error).
+Coverage is every yo on every mission (nav pitch + depth only), including
+M38's 64 duty-cycled yos. Caveat: these figures use the same-glider pooled
+polar (`FLIGHT_SEA064`); an uncalibrated airframe on published presets lands
+between this and the onboard error, still direction-unbiased.
+
+**Decision (DG): the flight model is deliberately TWINNED** — a full copy now
+lives in GliderADCP (`src/processing/flightmodel.jl`: `FlightParams` presets,
+`solve_aoa`, `flight_model`, `GliderFlight`, plus native `measure_aoa` from
+`throughwater_velocity` and `fit_flightparams`, so per-mission polar
+calibration no longer needs the package extension) so each package stands
+alone. Twin agreement verified to machine precision; physics fixes must land
+in both files. Dual loaders qualify the shared names; GliderTurbulence's ADCP
+extension now imports its own explicitly.
+
+**The DAC is now a per-yo ladder** — `compute_dac(nav, pings;
+fallback=flight_model(nav))`: ADCP water track → flight model → onboard
+estimate, flagged in `method`; `compute_dac(nav, flight_model(nav))` is the
+ADCP-less form. Examples all use the full ladder (M38: 126 ADCP + 64
+flight-model + 0 onboard). Tests 413.
+
+**Diagnostic promoted (same day):** `examples/dac_methods.jl` generates the
+three-DAC section comparison per mission and route
+(`M*_dac_methods_{delayed,telemetered}.png`): U/V under ADCP water-track /
+flight-model / onboard-DR DACs plus differences vs the ADCP reference. The
+differences are depth-uniform per yo (barotropic, as they must be); the
+onboard−ADCP panels show the track-correlated stripes — most strikingly M59's
+sustained +4–5 cm/s eastward block from Jul 27–Aug 13 while the glider pointed
+upstream into the Gulf Stream (the anti-track bias never averaging out), and
+M48's both-sign ~10 cm/s noisy-DR stripes. The telemetered figures reproduce
+the delayed ones nearly bin-for-bin.

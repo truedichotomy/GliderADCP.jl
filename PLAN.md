@@ -403,6 +403,32 @@ All six §8a tasks closed, then:
    30–63 mm/s; telemetered-vs-delayed improves to 33/31 mm/s (w r 0.67 → 0.71).
    Evidence + new-configuration check recipe in the QA/QC guide §2b.
 
+### 8c. Water-track DAC (2026-07-15)
+
+1. **Onboard flight-model forensics.** Three-way through-water speed comparison
+   (logged DR track / GliderTurbulence fixed polar / ADCP near-cell direct
+   measurement) on all four missions: the onboard model runs ×1.05–×1.15 fast
+   (≈ half the real angle of attack), biasing the nav-only DAC 2–4 cm/s
+   anti-track. Side finding: gli `Heading` is TRUE heading (declination applied
+   onboard) — verified against the AD2CP magnetic compass on M59/M38.
+2. **`compute_dac(nav, pings)`** — water-track DAC (fix-to-fix minus
+   `∫ throughwater_velocity dt`), production default in all examples including
+   realtime-telemetered (`max_gap = 90 s`); per-yo onboard fallback below 85 %
+   ADCP coverage, flagged. Acid-tested against GPS surface drift: improvement on
+   M37/M38/M48 (the drift disagreement is along-track — the DAC-error signature —
+   and the correction removes its predicted share); M59's drift referee carries a
+   mission-wide ~10 cm/s windage offset and cannot arbitrate (Gulf Stream context;
+   split test). Synthetic + gated acceptance tests. Full evidence:
+   validation doc 2026-07-15 entry; QA/QC §3b.
+3. **Flight model twinned into GliderADCP; DAC ladder.** Full flight-model kit
+   copied into `src/processing/flightmodel.jl` (deliberate duplication — each
+   package stands alone; twin agreement verified to machine precision; fixes land
+   in both files), with native `measure_aoa`/`fit_flightparams` calibration.
+   `compute_dac` became a per-yo ladder: ADCP water track → flight model
+   (`fallback=flight_model(nav)`; ~1.4 cm/s from the water track, unbiased —
+   quantified against the ADCP on all four missions) → onboard estimate;
+   `compute_dac(nav, flight_model(nav))` serves ADCP-less deployments. 413 tests.
+
 ## 9. Risks & open questions
 
 - **Attitude/sign conventions** are the classic failure mode: resolved by triple-checking

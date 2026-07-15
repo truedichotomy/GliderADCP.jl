@@ -366,6 +366,166 @@ end
         @test nrow(compute_dac(nav; min_duration=7200.0)) == 0
     end
 
+    @testset "compute_dac (ADCP-referenced): onboard flight-model error removed" begin
+        # Same construction, but the onboard DR runs 10 % fast (0.33 m/s modeled vs
+        # 0.30 m/s true through-water speed): the onboard DAC inherits the error as
+        # an anti-track bias, while the water-track method must recover the truth.
+        u_true, v_true = 0.12, -0.07
+        u_tw, u_dr = 0.30, 0.33                       # true vs onboard-modeled speed, east
+        lat0, lon0 = 70.0, 2.0
+        t0 = DateTime(2022, 11, 4)
+        T = 3600.0
+        times = DateTime[]; lons = Float64[]; lats = Float64[]
+        dr = Int8[]; depth = Float64[]
+        push!(times, t0); push!(lons, lon0); push!(lats, lat0); push!(dr, 0); push!(depth, 0.0)
+        for k in 1:60                                 # onboard DR: 10 % fast, east
+            t = k * T / 60
+            push!(times, t0 + Second(round(Int, t)))
+            push!(lons, lon0 + rad2deg(u_dr * t / (6.371e6 * cosd(lat0))))
+            push!(lats, lat0)
+            push!(dr, 1)
+            push!(depth, 100.0)
+        end
+        Tfix = T + 30                                 # physics: fix = true through-water + current drift
+        push!(times, t0 + Second(round(Int, Tfix)))
+        push!(lons, lon0 + rad2deg((u_tw + u_true) * Tfix / (6.371e6 * cosd(lat0))))
+        push!(lats, lat0 + rad2deg(v_true * Tfix / 6.371e6))
+        push!(dr, 0); push!(depth, 0.0)
+        nav = GliderNav(times, datetime2unix.(times), lons, lats,
+            fill(90.0, length(times)), zeros(length(times)), zeros(length(times)),
+            zeros(length(times)), depth, fill(Int16(110), length(times)), dr,
+            fill(-1.0, length(times)), DataFrame())
+
+        # pings: constant through-water flow east, full fix-to-fix coverage at 10 s
+        nt = Int(Tfix ÷ 10) + 1
+        ptimes = t0 .+ Second.(10 .* (0:nt-1))
+        offsets = collect(2.0:2.0:20.0)
+        nc = length(offsets)
+        E = fill(-u_tw, nc, nt)                       # relative flow = −(through-water velocity)
+        N = zeros(nc, nt)
+        pdep = fill(100.0, nt)
+        pp = ProcessedPings(collect(ptimes), datetime2unix.(ptimes), pdep,
+            fill(90.0, nt), offsets, E, N, zeros(nc, nt), offsets .+ pdep', :down,
+            fill((1, 2, 4), nt))
+
+        tw = throughwater_velocity(pp)
+        @test all(x -> x ≈ u_tw, filter(isfinite, tw.u))
+        @test all(x -> abs(x) < 1e-12, filter(isfinite, tw.v))
+
+        dac2 = compute_dac(nav, pp; min_duration=100.0)
+        @test nrow(dac2) == 1
+        @test dac2.method[1] === :adcp
+        @test dac2.coverage[1] ≈ 1.0
+        @test dac2.u[1] ≈ u_true atol = 1e-3          # flight-model error removed
+        @test dac2.v[1] ≈ v_true atol = 1e-3
+        @test dac2.u_ob[1] ≈ u_true - (u_dr * T - u_tw * Tfix) / Tfix atol = 1e-3
+        # yo ids and schema agree with the onboard method
+        dac1 = compute_dac(nav; min_duration=100.0)
+        @test dac2.yo == dac1.yo
+        @test dac2.u_ob[1] ≈ dac1.u[1] atol = 1e-9
+        @test all(hasproperty.(Ref(dac2), (:u_ob, :v_ob, :coverage, :method)))
+
+        # an interior instrument-off gap (~12 % of the window) is mean-filled: the
+        # answer holds and the coverage column reports the gap
+        gap = findall(t -> 1000 <= t - datetime2unix(t0) <= 1440, datetime2unix.(ptimes))
+        E2 = copy(E); E2[:, gap] .= NaN
+        pp2 = ProcessedPings(collect(ptimes), datetime2unix.(ptimes), pdep,
+            fill(90.0, nt), offsets, E2, N, zeros(nc, nt), offsets .+ pdep', :down,
+            fill((1, 2, 4), nt))
+        dacg = compute_dac(nav, pp2; min_duration=100.0)
+        @test dacg.method[1] === :adcp
+        @test 0.85 <= dacg.coverage[1] < 1.0
+        @test dacg.u[1] ≈ u_true atol = 1e-3
+
+        # no usable pings in the window → loud fallback to the onboard estimate
+        pp3 = ProcessedPings(collect(ptimes .+ Day(2)), datetime2unix.(ptimes .+ Day(2)),
+            pdep, fill(90.0, nt), offsets, E, N, zeros(nc, nt), offsets .+ pdep', :down,
+            fill((1, 2, 4), nt))
+        dacf = compute_dac(nav, pp3; min_duration=100.0)
+        @test dacf.method[1] === :onboard
+        @test dacf.coverage[1] == 0.0
+        @test dacf.u[1] ≈ dac1.u[1] atol = 1e-9
+    end
+
+    @testset "flight model (twin of GliderTurbulence's)" begin
+        # polar solution satisfies the force balance with the right sign
+        par = FlightParams()
+        for θdeg in (-30, -20, -14, 14, 20, 30)
+            θ = deg2rad(θdeg)
+            α = solve_aoa(θ; params=par)
+            @test isfinite(α)
+            @test sign(α) == -sign(θ)              # water from below on descent
+            @test abs(par.a * α * tan(θ - α) + par.C_D0 + par.C_D1 * α^2) < 1e-6
+        end
+        @test isnan(solve_aoa(0.0))                # no steady horizontal flight
+
+        # steady synthetic descent: U = |w|/|sin γ| and w = −dP/dt recovered
+        t0 = DateTime(2022, 11, 4)
+        tt = collect(t0 .+ Second.(0:10:1800))
+        w = 0.25
+        fl = flight_model(tt, collect(0.0:2.5:450.0), tt, fill(-20.0, length(tt)))
+        γ = deg2rad(-20.0) - solve_aoa(deg2rad(-20.0))
+        mid = 30:150
+        @test all(isfinite, fl.U[mid])
+        @test median(fl.U[mid]) ≈ w / abs(sin(γ)) atol = 1e-3
+        @test median(fl.w[mid]) ≈ -w atol = 1e-6
+    end
+
+    @testset "compute_dac: flight-model tier" begin
+        # onboard DR 10 % fast again, but now the truth is the through-water
+        # speed the flight model reconstructs from pitch + depth alone
+        u_true, v_true = 0.12, -0.07
+        lat0, lon0 = 70.0, 2.0
+        t0 = DateTime(2022, 11, 4)
+        T = 1800.0
+        w = 0.25
+        γ = deg2rad(-20.0) - solve_aoa(deg2rad(-20.0))
+        h_tw = w / abs(tan(γ))                    # true horizontal speed, east
+        times = DateTime[]; lons = Float64[]; lats = Float64[]
+        dr = Int8[]; depth = Float64[]; pitch = Float64[]
+        push!(times, t0); push!(lons, lon0); push!(lats, lat0)
+        push!(dr, 0); push!(depth, 0.0); push!(pitch, 0.0)
+        for k in 1:179
+            t = 10.0k
+            push!(times, t0 + Second(round(Int, t)))
+            push!(lons, lon0 + rad2deg(1.10h_tw * t / (6.371e6 * cosd(lat0))))
+            push!(lats, lat0)
+            push!(dr, 1); push!(depth, w * t); push!(pitch, -20.0)
+        end
+        Tfix = T + 30
+        push!(times, t0 + Second(round(Int, Tfix)))
+        push!(lons, lon0 + rad2deg((h_tw + u_true) * Tfix / (6.371e6 * cosd(lat0))))
+        push!(lats, lat0 + rad2deg(v_true * Tfix / 6.371e6))
+        push!(dr, 0); push!(depth, w * Tfix); push!(pitch, -20.0)
+        n = length(times)
+        nav = GliderNav(times, datetime2unix.(times), lons, lats,
+            fill(90.0, n), zeros(n), pitch, zeros(n), depth,
+            fill(Int16(110), n), dr, fill(-1.0, n), DataFrame())
+
+        fl = flight_model(nav)
+        dacF = compute_dac(nav, fl; min_duration=100.0)
+        @test nrow(dacF) == 1
+        @test dacF.method[1] === :flight
+        @test dacF.coverage[1] >= 0.85
+        @test dacF.u[1] ≈ u_true atol = 3e-3      # onboard 10 % bias removed
+        @test dacF.v[1] ≈ v_true atol = 3e-3
+        @test dacF.u_ob[1] < dacF.u[1]            # onboard was biased anti-track (east)
+
+        # ladder: pings cover nothing → flight model fills; no fallback → onboard
+        offsets = collect(2.0:2.0:20.0)
+        nt = 30
+        ptimes = collect((t0 + Day(2)) .+ Second.(10 .* (0:nt-1)))
+        ppx = ProcessedPings(ptimes, datetime2unix.(ptimes), fill(100.0, nt),
+            fill(90.0, nt), offsets, fill(-h_tw, length(offsets), nt),
+            zeros(length(offsets), nt), zeros(length(offsets), nt),
+            offsets .+ fill(100.0, nt)', :down, fill((1, 2, 4), nt))
+        dacL = compute_dac(nav, ppx; fallback=fl, min_duration=100.0)
+        @test dacL.method[1] === :flight
+        @test dacL.u[1] ≈ dacF.u[1] atol = 1e-9
+        dacO = compute_dac(nav, ppx; min_duration=100.0)
+        @test dacO.method[1] === :onboard
+    end
+
     @testset "end-to-end structure orientation (depth-varying flow through geometry)" begin
         # A pure baroclinic sign flip preserves depth means, dive/climb consistency and
         # DAC closure — so this dedicated test drives a depth-VARYING flow through the
@@ -1258,6 +1418,41 @@ end
             @test nrow(drift) > 50
             @info "M38 DAC: $(nrow(dac)) segments, median |DAC| = " *
                   "$(round(median(spd), digits=3)) m/s; $(nrow(drift)) surface-drift pairs"
+        end
+    end
+
+    if isfile(M38_NC) && isdir(M38_NAV)
+        @testset "M38 acceptance: ADCP-referenced (water-track) DAC" begin
+            # first 3 recording days (continuous duty cycle) to bound runtime; the
+            # rest of the mission exercises the loud onboard fallback
+            a = load_ad2cp(M38_NC)
+            a = a[a.t .< a.t[1] + 3 * 86400]
+            nav = load_seaexplorer_nav(M38_NAV)
+            qc!(a)
+            p = process_pings(a; lat=69.5, declination=magnetic_declination(nav, a.t))
+            dac1 = compute_dac(nav)
+            dac2 = compute_dac(nav, p)
+            @test dac2.yo == dac1.yo                    # fallback keeps every segment
+            wt = dac2.method .=== :adcp
+            @test count(wt) >= 10                       # covered window is water-tracked
+            @test all(dac2.coverage[wt] .>= 0.85)
+            @test all((dac2.u .== dac2.u_ob)[.!wt])     # fallback rows = onboard estimate
+            # the onboard flight model runs ~12 % fast on M38, so the water-track
+            # correction must point along-track (project Δdac onto the onboard
+            # through-water displacement) and sit in the forensic 1–8 cm/s band
+            al = Float64[]
+            for r in eachrow(dac2[wt, :])
+                dx, dy = lonlat_to_dxdy(r.lon0, r.lat0, r.lon_dr, r.lat_dr)
+                L = hypot(dx, dy)
+                L > 50 || continue
+                push!(al, ((r.u - r.u_ob) * dx + (r.v - r.v_ob) * dy) / L)
+            end
+            dmag = hypot.(dac2.u[wt] .- dac2.u_ob[wt], dac2.v[wt] .- dac2.v_ob[wt])
+            @test 0.01 < median(dmag) < 0.08
+            @test median(al) > 0
+            @info "M38 water-track DAC: $(count(wt))/$(nrow(dac2)) segments ADCP-referenced, " *
+                  "median |Δdac| = $(round(median(dmag), digits=4)) m/s " *
+                  "(along-track $(round(median(al), digits=4)) m/s)"
         end
     end
 
