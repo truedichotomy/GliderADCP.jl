@@ -768,3 +768,16 @@ Verified clean in the same review: the beam→ENU rotation chain from first
 principles, bin-index conventions across all products, sparse-system
 assembly, shear-bias round-trip, binary offsets vs the Nortek DF3/DF20
 layouts, and the new flight-model/DAC-ladder code.
+
+**ε impact audit (2026-07-15, follow-up):** the DAC rework does not touch
+GliderTurbulence.jl's turbulence parameters — ε/χ depend on velocity only
+through the flight model's through-water speed (wavenumber mapping k = f/U,
+probe calibration ÷ U²; the DAC never enters the chain), confirmed by code
+sweep (no DAC/absolute-velocity use anywhere in that package; the ATOMIX
+export's speed field is the flight-model U) and by its test suite passing
+unchanged. The useful byproduct: the water-track machinery audits the ε speed
+budget per mission (ε ∝ U⁴) — pooled `FLIGHT_SEA064` polar
+×0.99/0.99/1.05/1.07 (M37/M38/M48/M59); per-mission `adcp_flightparams` fit
+×1.00 everywhere except M48 (×1.05 — trim/attitude noise, not polar error).
+Code + figure recorded in GliderTurbulence's README (§Validation item 6) and
+its `examples/flightspeed_epsilon_budget.jl`.
